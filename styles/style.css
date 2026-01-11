@@ -1,0 +1,374 @@
+:root{
+    --indent-text: 0px;
+    --indent-chord: calc(var(--indent-text) + 16px);
+    --chord-color: #e74c3c;
+}
+body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background-color: #ffffff;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    /* width: 800px; Removed fixed width to allow container to size itself */
+}
+
+.song-container {
+    background: #fff;
+    padding: 40px 30px 30px 20px;
+    box-sizing: border-box;
+    display: inline-block; /* Shrink to fit content */
+}
+
+.song-header {
+    border-bottom: 2px solid #eee;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+}
+
+.song-title {
+    font-size: 32px;
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    text-align: left;
+}
+
+.song-meta {
+    font-size: 16px;
+    color: #7f8c8d;
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.song-body {
+    width: 100%;
+}
+
+.section {
+    margin-bottom: 15px;
+    page-break-inside: avoid; 
+}
+
+.section.verse { margin-bottom: 20px; }
+
+/* Standard Layout Styles (Default for these classes unless overridden) */
+.section.chorus {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-left: 5px solid #3498db;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+/* Empty Chorus (Standard Layout) */
+.section.chorus.section-empty {
+    /* Use standard chorus styles but add extra margin */
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+.section.chorus.section-empty .section-label {
+    margin-top: 8px; /* Compensate for margin-bottom to center vertically */
+}
+
+/* Tag Section Style (General) */
+.section.section-tag {
+    background-color: #fdf2f9; /* Very light purple/pink */
+    padding: 15px;
+    border-left: 5px solid #dba6cd; /* Soft pink/purple */
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.section.bridge {
+    background-color: #fff9f0;
+    padding: 15px;
+    border-left: 5px solid #e67e22;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.section.grid {
+    font-family: 'Courier New', monospace;
+    background-color: #effaf6; /* Very light teal */
+    padding: 10px;
+    border-left: 5px solid #48c9b0; /* Teal */
+    border-radius: 6px;
+    color: #555;
+    margin-bottom: 15px;
+    white-space: normal; 
+    line-height: 1.2;
+}
+
+.section.grid .chord-wrapper,
+.section.grid .chord,
+.section.grid .lyrics,
+.section.grid .line {
+    /* Reset old overrides */
+    display: initial;
+    margin: 0;
+}
+
+.grid-table {
+    border-collapse: collapse;
+    margin-bottom: 5px;
+}
+
+.grid-bar {
+    font-family: 'Courier New', monospace;
+    padding: 0 5px;
+    color: #48c9b0; /* Match section border/theme */
+    font-weight: bold;
+    width: 10px; 
+    text-align: center;
+    vertical-align: middle;
+    position: relative; /* Context for volta */
+}
+
+.grid-measure {
+    position: relative;
+    padding: 2px 6px;
+    vertical-align: top;
+}
+
+.grid-volta {
+    position: absolute;
+    top: 1px;
+    right: -8px;
+    font-size: 11px;
+    color: #888;
+    font-weight: bold;
+    white-space: nowrap;
+    padding: 0px 8px 2px 2px;
+    border: 2px solid #48c9b0;
+    border-width: 2px 0px 0px 2px;
+}
+
+.grid-chord {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: var(--chord-color);
+    font-size: 16px;
+}
+
+.grid-text {
+    font-family: 'Courier New', monospace;
+    color: #555;
+    font-size: 14px;
+}
+
+.section.grid .line {
+    margin-bottom: 5px; 
+    display: block;
+    white-space: pre-wrap; /* Preserve spacing */
+}
+
+.section.grid .line span {
+    display: inline;
+}
+
+.section-label {
+    font-weight: bold;
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #606b6c;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.line {
+    margin-bottom: var(--indent-text);
+    line-height: 1.2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.chord-wrapper {
+    display: flex;
+    flex-direction: column;
+    /* Removed margin-right from wrapper to prevent word breaks in lyrics */
+    margin-right: 0; 
+}
+
+.chord {
+    font-weight: bold;
+    color: var(--chord-color);
+    font-size: 17px;
+    font-family: 'Arial', sans-serif;
+    white-space: nowrap;
+    height: var(--indent-chord);
+    /* Add padding/margin to the CHORD only.
+       This will expand the chord box.
+       Since wrapper width = max(chord, lyric),
+       if chord+padding > lyric, wrapper grows -> space created.
+       if chord+padding < lyric, wrapper = lyric -> NO space created in lyrics flow.
+       This is exactly what is needed: "Space only if chord needs it".
+    */
+    padding-right: 5px; /* Adds visual space after chord name */
+    position: relative;
+}
+
+.lyrics {
+    font-size: 18px;
+    color: #2c3e50;
+    white-space: pre; 
+    height: 22px;
+}
+
+/* Comment Styles */
+.line.comment {
+    display: block; /* Normal block flow */
+    line-height: 1.5;
+    background-color: #fafafa;
+    border: 1px solid #eee;
+    padding: 4px 8px;
+    border-radius: 4px;
+    color: #555;
+}
+
+.line.comment .chord-wrapper {
+    display: inline;
+    flex-direction: row;
+    margin-right: 0;
+}
+
+.line.comment .chord {
+    display: inline;
+    font-size: 16px;
+    margin-bottom: 0;
+    height: auto;
+    padding-right: 0;
+}
+
+.line.comment .lyrics {
+    display: inline;
+    font-size: 16px;
+    font-style: italic;
+    white-space: normal;
+    height: auto;
+    color: #555;
+}
+
+/* --- Sidebar Layout --- */
+.layout-sidebar .section {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.layout-sidebar .section-label {
+    width: 76px;
+    padding-right: 10px;
+    box-sizing: border-box;
+    margin-bottom: 0;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.layout-sidebar .section-content {
+    flex-grow: 1;
+    width: auto;
+}
+
+/* Reset Box Styles for Sidebar (move to content) */
+.layout-sidebar .section.chorus,
+.layout-sidebar .section.bridge,
+.layout-sidebar .section.section-tag,
+.layout-sidebar .section.grid {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+}
+
+/* Apply Box Styles to Content in Sidebar */
+.layout-sidebar .section.chorus .section-content {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-left: 5px solid #3498db;
+    border-radius: 6px;
+}
+
+/* Empty Chorus (Sidebar Layout) */
+.layout-sidebar .section.chorus.section-empty .section-content {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+}
+
+.layout-sidebar .section.chorus.section-empty {
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+.layout-sidebar .section.bridge .section-content {
+    background-color: #fff9f0;
+    padding: 15px;
+    border-left: 5px solid #e67e22;
+    border-radius: 6px;
+}
+
+/* Sidebar Tag Style */
+.layout-sidebar .section.section-tag .section-content {
+    background-color: #fdf2f9;
+    padding: 15px;
+    border-left: 5px solid #dba6cd;
+    border-radius: 6px;
+}
+
+.layout-sidebar .section.grid .section-content {
+    font-family: 'Courier New', monospace;
+    background-color: #effaf6;
+    padding: 10px 10px 2px;
+    border-left: 5px solid #48c9b0;
+    border-radius: 6px;
+    color: #555;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+/* Sidebar Alignment Offsets */
+
+/* Case 1: Verse (No padding) */
+/* If offset-label (Chords + Text), push label down by chord height (21px) */
+.layout-sidebar .section.verse.offset-label .section-label {
+    margin-top: 4px;
+}
+
+/* Case 2: Chorus/Bridge (Padding 15px) */
+/* Base alignment for text-only or top-aligned content: align with padding start */
+.layout-sidebar .section.chorus .section-label,
+.layout-sidebar .section.bridge .section-label,
+.layout-sidebar .section.section-tag .section-label {
+    margin-top: 15px; 
+}
+/* If offset-label (Chords + Text), push label down further (15 + 21 = 36px) */
+.layout-sidebar .section.chorus.offset-label .section-label,
+.layout-sidebar .section.bridge.offset-label .section-label,
+.layout-sidebar .section.section-tag.offset-label .section-label {
+    margin-top: 19px;
+}
+
+/* Reset offset for empty chorus in sidebar */
+.layout-sidebar .section.chorus.section-empty .section-label {
+    margin-top: 0;
+}
+
+/* Case 3: Grid (Padding 10px) */
+.layout-sidebar .section.grid .section-label {
+    margin-top: 13px;
+}
+.layout-sidebar .section.grid.offset-label .section-label {
+    margin-top: -5px;
+}
+.section-label {
+    font-family: 'Courier New', monospace;
+}
+.chord .grid-volta {
+    top: -2px;
+    right: auto;
+    left: -11px;
+    color: var(--chord-color);
+    border-color: var(--chord-color);
+}

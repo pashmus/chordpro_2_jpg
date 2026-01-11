@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="../styles/style.css">
+</head>
+<body>
+    <div class="song-container layout-{{ layout }}">
+        <header class="song-header">
+            <h1 class="song-title">{{ title }}</h1>
+            <div class="song-meta">
+                {% if artist %}
+                <span class="meta-item"><strong>Автор:</strong> {{ artist }}</span>
+                {% endif %}
+                {% if key %}
+                <span class="meta-item"><strong>Ключ:</strong> {{ key }}</span>
+                {% endif %}
+                {% if time %}
+                <span class="meta-item"><strong>Размер:</strong> {{ time }}</span>
+                {% endif %}
+                {% if tempo %}
+                <span class="meta-item"><strong>Темп:</strong> {{ tempo }}</span>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="song-body">
+            {% for section in sections %}
+            <div class="section {{ section.type }} {% if not section.lines %}section-empty{% endif %} {% if section.offset_label %}offset-label{% endif %} {% if section.label == 'Tag:' %}section-tag{% endif %}">
+                {% if section.label or layout == 'sidebar' %}  
+                <div class="section-label">
+                    {% if section.offset_label %}<br/>{% endif %}
+                    {{ section.label }}</div>
+                {% endif %}
+                
+                <div class="section-content">
+                    {% if section.type == 'grid' %}
+                    <table class="grid-table">
+                        {% for line in section.lines %}
+                        <tr>
+                            {% if line.grid_cells %}
+                                {% for cell in line.grid_cells %}
+                                    {% if cell.is_bar %}
+                                        <td class="grid-bar">
+                                            {% if cell.volta %}
+                                                <span class="grid-volta">{{ cell.volta }}</span>
+                                            {% else %}
+                                            {{ cell.text }}
+                                            {% endif %}
+                                        </td>
+                                    {% else %}
+                                        <td class="grid-measure">
+                                            {% if cell.volta %}
+                                                <!-- Fallback if volta wasn't moved (e.g. start of line) -->
+                                                <span class="grid-volta">{{ cell.volta }}</span>
+                                            {% endif %}
+                                            {% for part in cell.parts %}
+                                                {% if part.chord %}
+                                                    <span class="grid-chord">{{ part.chord }}</span>
+                                                {% else %}
+                                                    <span class="grid-text">{{ part.text }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </td>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <!-- Fallback if grid parsing failed or empty -->
+                                <td colspan="100%">
+                                    {% for part in line.parts %}{{ part.text or part.chord }}{% endfor %}
+                                </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </table>
+                    {% else %}
+                        {% for line in section.lines %}
+                        <div class="line {% if line.is_comment %}comment{% endif %}">
+                            {% for part in line.parts %}
+                            <span class="chord-wrapper">
+                                {% if part.chord %}
+                                    <span class="chord">{% if part.volta %}<span class="grid-volta">{{ part.volta }}</span>{% endif %}{{ part.chord }}</span>
+                                {% endif %}
+                                <span class="lyrics">{{ part.text }}</span>
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
