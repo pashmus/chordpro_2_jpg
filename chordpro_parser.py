@@ -36,7 +36,7 @@ class Song:
             if section.type == 'chorus' and section.label:
                 # Normalize label: strip whitespace and trailing colon
                 norm_label = section.label.strip().rstrip(':')
-                
+
                 # Prioritize sections with content
                 if section.lines:
                     chorus_map[norm_label] = section
@@ -55,21 +55,21 @@ class Song:
 
             # Buffer for lines in the current section fragment
             current_lines = []
-            
+
             for line in section.lines:
                 # Check if this line is a comment reference
                 match_found = False
                 if line.is_comment:
                     # Construct text from parts
-                    # Usually comments parsed by _parse_line have one part with text, 
+                    # Usually comments parsed by _parse_line have one part with text,
                     # but let's be safe and join all text components.
                     comment_text = "".join(p.text for p in line.parts if p.text).strip()
                     norm_comment = comment_text.rstrip(':')
-                    
+
                     if norm_comment in chorus_map:
                         match_found = True
                         referenced_chorus = chorus_map[norm_comment]
-                        
+
                         # 1. Flush current lines to a section (if any)
                         # We use the original section's metadata
                         # If we have lines accumulated, we create a section chunk
@@ -80,7 +80,7 @@ class Song:
                             sub_section.lines = current_lines
                             new_sections.append(sub_section)
                             current_lines = []
-                        
+
                         # 2. Add the referenced chorus (Deep Copy)
                         # We don't want to modify the original chorus if we change this one later (though we re-generate)
                         chorus_copy = copy.deepcopy(referenced_chorus)
@@ -90,7 +90,7 @@ class Song:
 
                 if not match_found:
                     current_lines.append(line)
-            
+
             # Flush remaining lines
             if current_lines:
                 # If we split the section, the subsequent parts generally inherit the label/type
@@ -100,28 +100,157 @@ class Song:
                 # But current_lines was initialized empty. If loop finished and we added nothing, we add nothing.
                 # BUT if the original section had lines and we didn't split, we just rebuild it.
                 # If the original section was JUST the comment, current_lines is empty.
-                # We should be careful about empty sections? 
+                # We should be careful about empty sections?
                 # If we replaced the only line with a chorus section, we don't want an empty "Verse" section before/after.
                 # Logic:
                 # If `current_lines` is populated, we add it.
                 # If `current_lines` is empty, we don't add a section.
                 # UNLESS the original section was empty? (Not possible as we iterate lines)
-                
+
                 sub_section = Section(type=section.type, label=section.label)
                 sub_section.lines = current_lines
                 new_sections.append(sub_section)
 
         self.sections = new_sections
 
+    def extract_root_note(self, chord_str):
+        """
+        Извлекает root ноту из начала строки аккорда.
+        Root нота: заглавная буква (A-G, H) + опционально # или b.
+        Возвращает (note, rest) где note - нота или None, rest - остаток строки.
+        """
+        if not chord_str:
+            return None, chord_str
+
+        # Паттерн: заглавная буква A-G или H, затем опционально # или b
+        match = re.match(r'^([A-GH])([#b]?)(.*)$', chord_str)
+        if match:
+            note = match.group(1) + match.group(2)  # Буква + опциональный знак
+            rest = match.group(3)  # Остаток строки
+            return note, rest
+        return None, chord_str
+
+    def extract_bass_note(self, chord_str):
+        """
+        Извлекает басовую ноту после слэша.
+        Басовая нота: / + заглавная буква (A-G, H) + опционально # или b.
+        Возвращает (note, before_slash, after_note) где:
+        - note - нота или None
+        - before_slash - часть до слэша
+        - after_note - часть после ноты
+        """
+        if '/' not in chord_str:
+            return None, chord_str, ""
+
+        parts = chord_str.split('/', 1)
+        before_slash = parts[0]
+        after_slash = parts[1]
+
+        # Извлекаем ноту из начала after_slash
+        match = re.match(r'^([A-GH])([#b]?)(.*)$', after_slash)
+        if match:
+            note = match.group(1) + match.group(2)
+            after_note = match.group(3)
+            return note, before_slash, after_note
+
+        return None, before_slash, after_slash
+
+    def transpose_chord_parts(self, chord_str, semitones, new_key, rbc_mode):
+        """
+        Транспонирует root и басовую ноты в аккорде, сохраняя остальные символы.
+
+        Args:
+            chord_str: строка аккорда (без квадратных скобок)
+            semitones: количество полутонов для транспонирования
+            new_key: новая тональность
+            rbc_mode: режим интерпретации входа (True = English B, False = German B)
+
+        Returns:
+            транспонированная строка аккорда
+        """
+        if not chord_str:
+            return chord_str
+
+        # Извлекаем root ноту
+        root_note, root_rest = self.extract_root_note(chord_str)
+
+        # Если root нота не найдена, возвращаем как есть
+        if root_note is None:
+            return chord_str
+
+        # Извлекаем басовую ноту (если есть)
+        bass_note, before_slash, after_bass = self.extract_bass_note(root_rest)
+
+        # Если басовая нота найдена, root_rest = before_slash
+        # Если нет, root_rest остается как есть
+        if bass_note is not None:
+            root_rest = before_slash
+
+        # Нормализуем ноты для pychord (конвертация H/B)
+        def normalize_note(note, is_rbc):
+            """Конвертирует ноту в формат pychord (English notation)."""
+            if not note:
+                return note
+            s = note
+            if not is_rbc:
+                # German Input: H -> B, B -> Bb
+                temp = "###TEMP###"
+                s = s.replace('H', temp)
+                s = s.replace('B', 'Bb')
+                s = s.replace(temp, 'B')
+            else:
+                # RBC Mode: H -> B (на всякий случай)
+                s = s.replace('H', 'B')
+            return s
+
+        # Транспонируем root ноту
+        normalized_root = normalize_note(root_note, rbc_mode)
+        try:
+            transposed_root = transpose_note(normalized_root, semitones, new_key)
+        except Exception:
+            # Если транспонирование не удалось, оставляем как есть
+            transposed_root = normalized_root
+
+        # Транспонируем басовую ноту (если есть)
+        transposed_bass = None
+        if bass_note is not None:
+            normalized_bass = normalize_note(bass_note, rbc_mode)
+            try:
+                transposed_bass = transpose_note(normalized_bass, semitones, new_key)
+            except Exception:
+                transposed_bass = normalized_bass
+
+        # Форматируем обратно в немецкую нотацию
+        def format_note_to_german(note):
+            """Конвертирует ноту из English в German notation."""
+            if not note:
+                return note
+            # B -> H, Bb -> B
+            temp = "###TEMP###"
+            s = note.replace('Bb', temp)
+            s = s.replace('B', 'H')
+            s = s.replace(temp, 'B')
+            return s
+
+        # Форматируем транспонированные ноты
+        final_root = format_note_to_german(transposed_root)
+        final_bass = format_note_to_german(transposed_bass) if transposed_bass else None
+
+        # Собираем результат
+        result = final_root + root_rest
+        if final_bass is not None:
+            result += '/' + final_bass + after_bass
+
+        return result
 
     def transpose(self, semitones, rbc_mode=False):
         """
         Transpose all chords in the song by the given number of semitones.
-        
+
         Input Interpretation:
         - Default (rbc_mode=False): German Input. 'B' = Bb, 'H' = B.
         - rbc_mode=True: English Input (Real B Chord). 'B' = B, 'Bb' = Bb.
-        
+
         Output Format:
         - Always German Output. Internal 'B' -> 'H', Internal 'Bb' -> 'B'.
         """
@@ -131,7 +260,7 @@ class Song:
         def normalize_input(chord_str, is_rbc):
             """Convert input string to standard English Pychord notation."""
             s = chord_str
-            # Always handle H -> B (Si natural) as a convenience/safety even in RBC mode, 
+            # Always handle H -> B (Si natural) as a convenience/safety even in RBC mode,
             # though strictly RBC implies English B.
             # But primarily:
             if not is_rbc:
@@ -163,15 +292,15 @@ class Song:
         # Determine current key
         # If no key is specified, default to 'C'
         current_key = self.key if self.key else "C"
-        
+
         # Calculate new key
         # transpose_note(note, semitones, scale)
         # We usually transpose the key relative to C to find the new root
         new_key = transpose_note(current_key, semitones, "C")
-        
+
         # Update the song key
         self.key = new_key
-        
+
         # Iterate through all sections and lines
         for section in self.sections:
             for line in section.lines:
@@ -183,46 +312,26 @@ class Song:
                             continue
 
                         original_chord_str = part.chord.strip()
-                        
-                        # Step 1: Normalize Input to English
-                        english_chord_str = normalize_input(original_chord_str, rbc_mode)
-                        
-                        try:
-                            # Create chord object
-                            c = Chord(english_chord_str)
-                            # Transpose
-                            if semitones != 0:
-                                c.transpose(semitones, scale=new_key)
-                            
-                            # Get string representation (Internal English)
-                            new_chord_str = str(c)
-                            
-                            # Step 2: Format Output to German (Always)
-                            final_chord_str = format_output(new_chord_str)
-                                
-                            # Update the part
-                            part.chord = final_chord_str
-                        except Exception as e:
-                            # If pychord cannot parse the chord, leave it as is
-                            # This handles cases like N.C. or custom formatting
-                            print(f"Warning: Could not transpose chord '{part.chord}': {e}")
-                
+
+                        # Используем новую функцию для транспонирования root и басовых нот
+                        # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
+                        final_chord_str = self.transpose_chord_parts(original_chord_str, semitones, new_key, rbc_mode)
+
+                        # Update the part
+                        part.chord = final_chord_str
+
                 # 2. Handle grid cells
                 if hasattr(line, 'grid_cells') and line.grid_cells:
                     for cell in line.grid_cells:
                         for part in cell.parts:
                             if part.chord:
                                 original_chord_str = part.chord.strip()
-                                english_chord_str = normalize_input(original_chord_str, rbc_mode)
-                                try:
-                                    c = Chord(english_chord_str)
-                                    if semitones != 0:
-                                        c.transpose(semitones, scale=new_key)
-                                    new_chord_str = str(c)
-                                    final_chord_str = format_output(new_chord_str)
-                                    part.chord = final_chord_str
-                                except Exception as e:
-                                    print(f"Warning: Could not transpose grid chord '{part.chord}': {e}")
+
+                                # Используем новую функцию для транспонирования root и басовых нот
+                                # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
+                                final_chord_str = self.transpose_chord_parts(original_chord_str, semitones, new_key, rbc_mode)
+
+                                part.chord = final_chord_str
 
 
     def align_chords(self):
@@ -236,18 +345,18 @@ class Song:
                 for i, part in enumerate(line.parts):
                     if not part.chord:
                         continue
-                        
+
                     # Skip if chord is not attached to text (e.g. [A] [B])
                     # User: "Аккорды, которые не привязаны к тексту таким образом не надо выравнивать"
                     if not part.text or not part.text.strip():
                         continue
-                        
+
                     chord_len = len(part.chord)
                     shift_needed = (chord_len - 1) // 2
-                    
+
                     if shift_needed <= 0:
                         continue
-                        
+
                     shifts_done = 0
                     while shifts_done < shift_needed:
                         # Case 1: Start of line -> Prepend space
@@ -255,22 +364,22 @@ class Song:
                             part.text = " " + part.text
                             shifts_done += 1
                             continue
-                            
+
                         prev_part = line.parts[i-1]
-                        
+
                         # Case 2: Previous part has text -> Move char
                         if prev_part.text:
                             char_to_move = prev_part.text[-1]
                             prev_part.text = prev_part.text[:-1]
                             part.text = char_to_move + part.text
                             shifts_done += 1
-                        
+
                         # Case 3: Previous part has NO text
                         else:
                             # If previous part has a chord, we are blocked.
                             if prev_part.chord:
                                 break # Stop shifting
-                            
+
                             # If previous part has NO chord (and no text), it's empty text part (e.g. initially empty or exhausted start)
                             # Treat as start of line (add space)
                             if not prev_part.chord:
@@ -315,12 +424,12 @@ class ChordProParser:
     def parse(self, content):
         song = Song()
         lines = content.splitlines()
-        
+
         # Start with an implied verse if lyrics appear before any directive,
         # but usually we wait for the first section or just append to a 'generic' section.
         # Let's start with None and create on demand.
         current_section = None
-        
+
         def ensure_section(type="verse", label="Verse"):
             nonlocal current_section
             if current_section is None:
@@ -332,7 +441,7 @@ class ChordProParser:
             line = line.strip()
             if not line:
                 continue
-                
+
             # Directives
             if line.startswith('{') and line.endswith('}'):
                 inner = line[1:-1]
@@ -373,39 +482,39 @@ class ChordProParser:
                     label = value if value else "Instr.:"
                     current_section = Section(type="grid", label=label)
                     song.sections.append(current_section)
-                
+
                 elif key in ['c', 'comment']:
                      # Parse the comment content for chords
                     parsed_line = self._parse_line(value)
                     parsed_line.is_comment = True
-                    
+
                     if current_section is None:
                         current_section = Section(type="verse", label="")
                         song.sections.append(current_section)
                     current_section.lines.append(parsed_line)
 
-                # Section End (we mainly just finish the current section,  
+                # Section End (we mainly just finish the current section,
                 # effectively doing nothing as the next section start will handle creation,
                 # but we can reset current_section to None to catch "orphan" lines if we wanted)
                 elif key in ['eoc', 'end_of_chorus', 'eov', 'end_of_verse', 'eob', 'end_of_bridge', 'eog', 'end_of_grid']:
                     current_section = None
-                    # Keeping current_section active allows trailing lines to attach to it, 
+                    # Keeping current_section active allows trailing lines to attach to it,
                     # but typically ChordPro structure is strict.
                     pass
 
                 else:
                     song.metadata[key] = value
-                
+
                 continue
-            
+
             # Comments
             if line.startswith('#'):
                 continue
-            
+
             # Inline Comment Directive (e.g. {comment: Intro...})
-            # Handled in directives loop if it was {comment:...}, 
+            # Handled in directives loop if it was {comment:...},
             # BUT the directives loop above handles keys. We need to add 'comment' there.
-            
+
             # Let's move comment handling into the directives block
             # Re-reading the code: I am outside the directives block here.
             # I need to modify the directives block to include 'comment' / 'c'
@@ -421,9 +530,9 @@ class ChordProParser:
                 parsed_line = self._parse_grid_line(line)
             else:
                 parsed_line = self._parse_line(line)
-            
+
             current_section.lines.append(parsed_line)
-            
+
         # Post-process: Expand chorus references
         song.expand_chorus_references()
 
@@ -431,19 +540,19 @@ class ChordProParser:
 
     def _parse_grid_line(self, line_text):
         line_obj = Line()
-        
-        # Regex to split by bars. 
+
+        # Regex to split by bars.
         # Detect all bar types: |, ||, :|, |:, |1 (where 1 is volta, handled later), etc.
         # We look for standard bar delimiters.
         # Order matters for regex: longest first.
         tokens = re.split(r'(\|\||:\||\|:|\|)', line_text)
-        
+
         for token in tokens:
-            if not token: 
+            if not token:
                 continue
-                
+
             stripped = token.strip()
-            
+
             # Check if it is a bar
             if stripped in ['|', '||', ':|', '|:']:
                 # It is a bar
@@ -452,7 +561,7 @@ class ChordProParser:
             else:
                 # It is content (measure)
                 # Parse volta and content
-                
+
                 content_text = token.strip()
                 if not content_text:
                     # Empty space between bars or at end?
@@ -469,17 +578,17 @@ class ChordProParser:
                     # I need a cell between them if there was space.
                     # But `re.split` gives " " between "|" and "|".
                     pass
-                
+
                 # If stripped is empty but token was not, it's whitespace.
                 # If we have `| |`, we want a cell.
                 # But typically we want explicit content.
                 # Let's proceed with parsing content if there is any text.
-                
+
                 if not content_text:
                     continue
 
                 volta = None
-                
+
                 # Check for volta (starts with number)
                 # Example: "1 Am" -> volta 1
                 volta_match = re.match(r'^(\d[\d,\.]*)\s+(.*)', content_text)
@@ -492,9 +601,9 @@ class ChordProParser:
                     if volta_match:
                         volta = volta_match.group(1)
                         content_text = ""
-                
+
                 cell = GridCell(is_bar=False, volta=volta)
-                
+
                 # Parse content parts
                 # Split by space to identify chords / text
                 sub_tokens = content_text.split()
@@ -507,25 +616,25 @@ class ChordProParser:
                     elif sub == '%':
                          cell.parts.append(Part(text="%"))
                     else:
-                         # Try to parse as chord
-                         try:
-                             check_token = sub.replace('H', 'B')
-                             # Basic validation
-                             Chord(check_token)
+                         # Check if token starts with a note (A-G, H) - treat as chord
+                         # This allows non-standard chords like "Ebh4/Gb" to be recognized
+                         note_match = re.match(r'^([A-GH])([#b]?)', sub)
+                         if note_match:
+                             # Starts with a note - treat as chord (even if pychord doesn't recognize it)
                              cell.parts.append(Part(chord=sub, text=""))
-                         except:
+                         else:
                              # Not a chord, treat as text
                              cell.parts.append(Part(text=sub + " "))
-                
+
                 line_obj.grid_cells.append(cell)
-                
+
         return line_obj
 
     def _parse_line(self, line_text):
         line_obj = Line()
-        
+
         # Check for grid lines which might not have standard brackets if it's just | G | C |
-        # But standard chordpro usually still brackets chords like [G] even in grids, 
+        # But standard chordpro usually still brackets chords like [G] even in grids,
         # OR it uses the |...| syntax.
         # The example `| G/B | C2 | D | G | - 2x` suggests raw text with bars.
         # Since our parser looks for `[`, lines without brackets are treated as pure text.
@@ -535,23 +644,23 @@ class ChordProParser:
         # If we just treat this as text, it won't be highlighted as chords.
         # Strategy: regex for likely chords? Or just leave as text but style the "grid" section in monospace.
         # Monospace is the safest bet for grid sections without brackets.
-        
+
         parts = line_text.split('[')
-        
+
         # First part is text before any chord
         if parts[0]:
             line_obj.parts.append(Part(chord=None, text=parts[0]))
-            
+
         for chunk in parts[1:]:
             if ']' in chunk:
                 chord_part, text_part = chunk.split(']', 1)
-                
+
                 # Handle non-transposable chords (starting with *)
                 is_transposable = True
                 if chord_part.startswith('*'):
                     chord_part = chord_part[1:]
                     is_transposable = False
-                    
+
                 line_obj.parts.append(Part(chord=chord_part, text=text_part, is_transposable=is_transposable))
             else:
                 # Malformed
@@ -563,18 +672,18 @@ class ChordProParser:
         i = 0
         while i < len(line_obj.parts):
             p = line_obj.parts[i]
-            
+
             # Check if this part is a volta marker
             is_volta = False
             volta_num = None
-            
+
             if p.chord and not p.text.strip():
                 # Regex for (1.) or (1.2.) etc.
                 match = re.match(r'^\((\d+(?:\.\d+)?)\.\)$', p.chord.strip())
                 if match:
                     is_volta = True
                     volta_num = match.group(1)
-            
+
             # If it is a volta and next part exists and has a chord
             if is_volta and i + 1 < len(line_obj.parts):
                 next_p = line_obj.parts[i+1]
@@ -584,10 +693,10 @@ class ChordProParser:
                     merged_parts.append(next_p)
                     i += 2 # Skip both current and next (since we used next)
                     continue
-            
+
             merged_parts.append(p)
             i += 1
-            
+
         line_obj.parts = merged_parts
-                
+
         return line_obj

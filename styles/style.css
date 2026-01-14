@@ -14,7 +14,7 @@ body {
 
 .song-container {
     background: #fff;
-    padding: 40px 30px 30px 20px;
+    padding: 20px 20px 20px 18px;
     box-sizing: border-box;
     display: inline-block; /* Shrink to fit content */
 }
@@ -26,7 +26,7 @@ body {
 }
 
 .song-title {
-    font-size: 32px;
+    font-size: 28px;
     margin: 0 0 10px 0;
     color: #2c3e50;
     text-align: left;
@@ -34,7 +34,7 @@ body {
 
 .song-meta {
     font-size: 16px;
-    color: #7f8c8d;
+    color: #606b6c;
     display: flex;
     gap: 30px;
     flex-wrap: wrap;
@@ -258,8 +258,8 @@ body {
 }
 
 .layout-sidebar .section-label {
-    width: 76px;
-    padding-right: 10px;
+    width: 82px;
+    padding-right: 5px;
     box-sizing: border-box;
     margin-bottom: 0;
     text-align: right;

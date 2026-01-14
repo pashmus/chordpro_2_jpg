@@ -6,10 +6,10 @@ from jinja2 import Environment, FileSystemLoader
 from chordpro_parser import ChordProParser
 
 # Configuration
-INPUT_DIR = 'converter_files\\input_cho'
-OUTPUT_DIR = 'converter_files\\output_jpg'
-TEMPLATE_DIR = 'converter_files\\templates'
-STYLES_DIR = 'converter_files\\styles'
+INPUT_DIR = 'input_cho'
+OUTPUT_DIR = 'output_jpg'
+TEMPLATE_DIR = 'templates'
+STYLES_DIR = 'styles'
 
 
 def main():
