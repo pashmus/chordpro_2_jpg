@@ -133,6 +133,7 @@ def main():
                 'title': song.title,
                 'artist': song.artist,
                 'key': song.key,
+                'capo': song.capo,
                 'time': song.time,
                 'tempo': song.tempo,
                 'sections': sections_data,

@@ -1,4 +1,6 @@
 # ChordPro Converter
+file:///D:/Work/2023_Sbornik_Samara_Bot/Sbornik_samara_bot/CHORD_PRO_PROJECT/chordpro_2_jpg/output_jpg/%D0%94%D1%83%D1%88%D0%B0%20%D0%BC%D0%BE%D1%8F%20%D1%82%D0%B0%D0%BA%20%D0%B6%D0%B4%D1%91%D1%82%20%D0%A2%D0%B5%D0%B1%D1%8F.chordpro.html
+
 
 Мощный инструмент для конвертации музыкальных файлов формата `.chordpro` в красивые изображения (JPG) и HTML-страницы. Поддерживает различные макеты, транспонирование, германскую нотацию и сложные музыкальные сетки (Grids).
 

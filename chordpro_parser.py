@@ -20,7 +20,9 @@ class Song:
         self.artist = ""
         self.key = ""
         self.tempo = ""
+        self.tempo = ""
         self.time = ""
+        self.capo = ""
         self.metadata = {}
         self.sections = []
 
@@ -456,18 +458,29 @@ class ChordProParser:
                     song.artist = value
                 elif key in ['key', 'k']:
                     song.key = value
+                elif key in ['capo']:
+                    song.capo = value
                 elif key in ['tempo', 'bpm']:
                     song.tempo = value
                 elif key in ['time']:
                     song.time = value
                 # Section Start
                 elif key in ['soc', 'start_of_chorus']:
-                    label = value if value else "Припев:"
-                    current_section = Section(type="chorus", label=label)
+                    label = value.strip()
+                    # Check for Pre-chorus
+                    if label.lower().startswith("пре-пр"):
+                        current_section = Section(type="pre_chorus", label=label)
+                    else:
+                        current_section = Section(type="chorus", label=label if label else "Пр.:")
+
                     song.sections.append(current_section)
                 elif key == 'chorus':
-                    label = value if value else "Припев"
-                    current_section = Section(type="chorus", label=label)
+                    label = value if value else "Пр." # Item 2: Handle bare {chorus}
+                    # Also check for Pre-chorus shorthand if it exists (unlikely but safe)
+                    if label.lower().startswith("пре-пр"):
+                        current_section = Section(type="pre_chorus", label=label)
+                    else:
+                        current_section = Section(type="chorus", label=label)
                     song.sections.append(current_section)
                     current_section = None
                 elif key in ['sov', 'start_of_verse']:
