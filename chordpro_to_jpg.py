@@ -20,8 +20,7 @@ def main():
                             help="Real B Chord: Input 'B' is B natural, 'Bb' is B flat. Default (without this flag) is German input: 'B' is B flat, 'H' is B natural.")
     cli_parser.add_argument("--layout", "-l", type=str, default="sidebar", choices=["standard", "sidebar"],
                             help="Layout type: 'sidebar' (default) or 'standard'")
-    cli_parser.add_argument("--no-align", action="store_true",
-                            help="Disable automatic chord alignment (centering chords over text)")
+
     args = cli_parser.parse_args()
 
     # Ensure output directory exists
@@ -60,9 +59,7 @@ def main():
 
             song.transpose(args.transpose, rbc_mode=args.rbc)
 
-            # Align chords visually (unless disabled)
-            if not args.no_align:
-                song.align_chords()
+
 
             # Prepare context for template
             sections_data = []
@@ -73,13 +70,46 @@ def main():
 
                 # Check alignment for the section label (for sidebar layout)
                 # We look at the first line to decide if we need to offset the label.
+                # Helper to flatten parts for checking content
+                def collect_parts(items):
+                    p = []
+                    for item in items:
+                        if hasattr(item, 'is_volta_group') and item.is_volta_group:
+                            p.extend(collect_parts(item.parts))
+                        else:
+                            p.append(item)
+                    return p
+
+                # Helper to serialize parts for template
+                def serialize_item(item, is_anchor=False, is_floating=False, floating_siblings=None):
+                    if hasattr(item, 'is_volta_group') and item.is_volta_group:
+                        return {
+                            'is_volta_group': True,
+                            'number': item.number,
+                            'is_anchor': is_anchor,
+                            'is_floating': is_floating,
+                            'floating_siblings': [serialize_item(s) for s in (floating_siblings or [])],
+                            'parts': [serialize_item(p) for p in item.parts]
+                        }
+                    else:
+                        return {
+                            'chord': item.chord,
+                            'text': item.text,
+                            'volta': item.volta,
+                            'is_volta_group': False
+                        }
+
+                # Check alignment for the section label (for sidebar layout)
+                # We look at the first line to decide if we need to offset the label.
                 offset_label = False
                 if sec.lines:
                     first_line = sec.lines[0]
                     # Check if first line has both chords and text
                     has_chords = False
                     has_text = False
-                    for part in first_line.parts:
+
+                    flat_parts = collect_parts(first_line.parts)
+                    for part in flat_parts:
                         if part.chord and part.chord.strip():
                             has_chords = True
                         if part.text and part.text.strip():
@@ -93,6 +123,8 @@ def main():
                     if sec.type == 'grid' and hasattr(line, 'grid_cells') and line.grid_cells:
                         cells_data = []
                         for i, cell in enumerate(line.grid_cells):
+                            # Grid cells usually contain simple parts, but if they ever contain VoltaGroups (unlikely given grid parser), this would need update.
+                            # Grid parser currently creates Parts directly.
                             cell_parts = [{'chord': p.chord, 'text': p.text} for p in cell.parts]
                             current_cell_data = {
                                 'is_bar': cell.is_bar,
@@ -115,8 +147,23 @@ def main():
                             'is_comment': False
                         })
                     else:
-                        parts_data = [{'chord': part.chord, 'text': part.text, 'volta': part.volta} for part in
-                                      line.parts]
+                        # Identify voltas in this line to handle stack logic
+                        line_voltas = [p for p in line.parts if hasattr(p, 'is_volta_group') and p.is_volta_group]
+
+                        parts_data = []
+                        v_idx = 0
+                        for part in line.parts:
+                            if hasattr(part, 'is_volta_group') and part.is_volta_group:
+                                is_anchor = (v_idx == 0)
+                                is_floating = (v_idx > 0)
+                                siblings = line_voltas[1:] if is_anchor else []
+                                parts_data.append(serialize_item(part, is_anchor=is_anchor,
+                                                                 is_floating=is_floating,
+                                                                 floating_siblings=siblings))
+                                v_idx += 1
+                            else:
+                                parts_data.append(serialize_item(part))
+
                         lines_data.append({
                             'parts': parts_data,
                             'is_comment': getattr(line, 'is_comment', False)

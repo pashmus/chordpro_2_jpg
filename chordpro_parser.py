@@ -303,11 +303,23 @@ class Song:
         # Update the song key
         self.key = new_key
 
+        def collect_parts(items):
+            """Recursively collect Part objects from a list of items (Parts or VoltaGroups)."""
+            parts = []
+            for item in items:
+                if hasattr(item, 'is_volta_group') and item.is_volta_group:
+                    parts.extend(collect_parts(item.parts))
+                else:
+                    parts.append(item)
+            return parts
+
         # Iterate through all sections and lines
         for section in self.sections:
             for line in section.lines:
-                # 1. Handle standard parts
-                for part in line.parts:
+                # 1. Handle standard parts (flatten structure for traversal)
+                all_parts = collect_parts(line.parts)
+
+                for part in all_parts:
                     if part.chord:
                         # Skip if not transposable
                         if not part.is_transposable:
@@ -336,59 +348,6 @@ class Song:
                                 part.chord = final_chord_str
 
 
-    def align_chords(self):
-        """
-        Visually centers chords over text by shifting characters from the previous part
-        to the current part (effectively moving the chord left), or adding spaces
-        if at the start of the line.
-        """
-        for section in self.sections:
-            for line in section.lines:
-                for i, part in enumerate(line.parts):
-                    if not part.chord:
-                        continue
-
-                    # Skip if chord is not attached to text (e.g. [A] [B])
-                    # User: "Аккорды, которые не привязаны к тексту таким образом не надо выравнивать"
-                    if not part.text or not part.text.strip():
-                        continue
-
-                    chord_len = len(part.chord)
-                    shift_needed = (chord_len - 1) // 2
-
-                    if shift_needed <= 0:
-                        continue
-
-                    shifts_done = 0
-                    while shifts_done < shift_needed:
-                        # Case 1: Start of line -> Prepend space
-                        if i == 0:
-                            part.text = " " + part.text
-                            shifts_done += 1
-                            continue
-
-                        prev_part = line.parts[i-1]
-
-                        # Case 2: Previous part has text -> Move char
-                        if prev_part.text:
-                            char_to_move = prev_part.text[-1]
-                            prev_part.text = prev_part.text[:-1]
-                            part.text = char_to_move + part.text
-                            shifts_done += 1
-
-                        # Case 3: Previous part has NO text
-                        else:
-                            # If previous part has a chord, we are blocked.
-                            if prev_part.chord:
-                                break # Stop shifting
-
-                            # If previous part has NO chord (and no text), it's empty text part (e.g. initially empty or exhausted start)
-                            # Treat as start of line (add space)
-                            if not prev_part.chord:
-                                part.text = " " + part.text
-                                shifts_done += 1
-                            else:
-                                break
 
 
 
@@ -421,6 +380,12 @@ class Part:
 
     def __repr__(self):
         return f"Part(chord={self.chord}, text={self.text}, transposable={self.is_transposable}, volta={self.volta})"
+
+class VoltaGroup:
+    def __init__(self, number, parts=None):
+        self.number = number
+        self.parts = parts if parts is not None else []
+        self.is_volta_group = True
 
 class ChordProParser:
     def parse(self, content):
@@ -679,37 +644,109 @@ class ChordProParser:
                 # Malformed
                 line_obj.parts.append(Part(chord=None, text='[' + chunk))
 
-        # Post-process: Merge volta markers [1.] with following chords [E]
-        # Look for Part(chord="(1.)", text="") followed immediately by Part(chord="...")
-        merged_parts = []
-        i = 0
-        while i < len(line_obj.parts):
-            p = line_obj.parts[i]
-
-            # Check if this part is a volta marker
-            is_volta = False
-            volta_num = None
-
-            if p.chord and not p.text.strip():
-                # Regex for (1.) or (1.2.) etc.
-                match = re.match(r'^\((\d+(?:\.\d+)?)\.\)$', p.chord.strip())
-                if match:
-                    is_volta = True
-                    volta_num = match.group(1)
-
-            # If it is a volta and next part exists and has a chord
-            if is_volta and i + 1 < len(line_obj.parts):
-                next_p = line_obj.parts[i+1]
-                if next_p.chord:
-                    # Merge volta into next part
-                    next_p.volta = volta_num
-                    merged_parts.append(next_p)
-                    i += 2 # Skip both current and next (since we used next)
-                    continue
-
-            merged_parts.append(p)
-            i += 1
-
-        line_obj.parts = merged_parts
+        line_obj.parts = self._group_voltas(line_obj.parts)
 
         return line_obj
+
+    def _group_voltas(self, parts):
+        """
+        Groups parts into VoltaGroup objects based on start/end markers.
+        Start marker: Chord starts with '(', e.g., '(1.' or '(1.G'
+        End marker: Chord ends with ')', e.g., 'E)' or ')'
+        """
+        new_items = []
+        current_volta = None
+
+        for part in parts:
+            if not part.chord:
+                if current_volta:
+                    current_volta.parts.append(part)
+                else:
+                    new_items.append(part)
+                continue
+
+            chord_str = part.chord.strip()
+
+            # Check for Start Marker: (1. or (1.2.
+            # Regex: Starts with '(', digit, optional lines/dots, MUST end with dot.
+            # We want to capture the number '1.' or '1.2.'
+            start_match = re.match(r'^\((\d+[\d\.]*\.)', chord_str)
+            # Check for End Marker: Ends with ')'
+            end_match = chord_str.endswith(')')
+
+            if start_match:
+                # If we were already in a volta, close it (fallback behavior for missing end)
+                if current_volta:
+                    new_items.append(current_volta)
+                    current_volta = None
+
+                volta_num = start_match.group(1).rstrip('.')
+
+                # Clean the chord string for display
+                # Remove the leading '(1.' prefix
+                clean_chord = chord_str[len(start_match.group(0)):]
+
+                # If end marker is ALSO here (e.g. `[(1.G)]`)
+                if end_match:
+                     clean_chord = clean_chord[:-1] # Remove trailing ')'
+
+                part.chord = clean_chord if clean_chord else None
+
+                current_volta = VoltaGroup(number=volta_num)
+                current_volta.parts.append(part)
+
+                if end_match:
+                    # Opens and closes in same part
+                    self._optimize_and_append_volta(new_items, current_volta)
+                    current_volta = None
+
+            elif end_match and current_volta:
+                # End of active volta: Remove trailing ')' and close group
+                clean_chord = chord_str[:-1]
+                part.chord = clean_chord if clean_chord else None
+
+                current_volta.parts.append(part)
+                self._optimize_and_append_volta(new_items, current_volta)
+                current_volta = None
+
+            else:
+                # Normal part or closing bracket WITHOUT an active volta
+                if current_volta:
+                    current_volta.parts.append(part)
+                else:
+                    new_items.append(part)
+
+        # Flush open volta
+        if current_volta:
+             self._optimize_and_append_volta(new_items, current_volta)
+
+        return new_items
+
+    def _optimize_and_append_volta(self, target_list, volta_group):
+        """
+        Optimizes the volta group by moving leading text-only parts OUT of the group.
+        This ensures formatting (brackets, numbers) starts at the first actual chord,
+        preventing lyrics breaks if the marker was placed before a syllable without a chord.
+        """
+        # If group is empty, just distinct
+        if not volta_group.parts:
+            target_list.append(volta_group)
+            return
+
+        # Check if there is AT LEAST ONE part with a chord in the group
+        has_chords = any(p.chord for p in volta_group.parts)
+
+        if not has_chords:
+            # If no chords at all, we keep it as is (bracket over text)
+            target_list.append(volta_group)
+            return
+
+        # Eject leading parts that have NO chord
+        # We stop as soon as we hit a part with a chord
+        while volta_group.parts and not volta_group.parts[0].chord:
+            p = volta_group.parts.pop(0)
+            target_list.append(p)
+
+        # Determine if we still have parts (should allow yes if has_chords was true)
+        if volta_group.parts:
+            target_list.append(volta_group)
