@@ -392,3 +392,68 @@ body {
     color: var(--chord-color);
     border-color: var(--chord-color);
 }
+
+/* Volta Styles for Standard Lyrics */
+.volta-span {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-end;
+    padding: 0;
+    margin: 0;
+    /* Do not use margin-right here as it breaks lyrics flow.
+       Spacing between brackets is handled by .volta-stack and .in-stack. */
+    margin-right: 0;
+}
+.volta-span::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -13px;
+    right: 0;
+    height: 12px;
+    border: 2px solid;
+    border-color: var(--volta-color, #7f8c8d);
+    border-bottom: 0;
+    border-width: 2px 2px 0 2px;
+    pointer-events: none;
+    z-index: 0;
+}
+.volta-number {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    white-space: nowrap;
+    top: 1px;
+    left: -10px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--volta-color, #7f8c8d);
+    z-index: 5;
+}
+.volta-1 { --volta-color: #2980b9; }
+.volta-2 { --volta-color: #8e44ad; }
+.volta-3 { --volta-color: #27ae60; }
+.volta-span .chord-wrapper {
+    z-index: 1;
+}
+
+/* Volta Stack for cascade (2nd, 3rd) voltas */
+.volta-stack {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    display: flex;
+    white-space: nowrap;
+    z-index: 10;
+    /* Added margin-left to compensate for negative offsets and match the gap between siblings */
+    margin-left: 15px;
+}
+
+/* Ensure voltas in stack have their own brackets and numbers */
+.volta-span.in-stack {
+    display: inline-flex;
+    margin-right: 15px; /* Keep spacing between voltas in stack */
+}
+

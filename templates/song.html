@@ -81,13 +81,37 @@
                     {% else %}
                         {% for line in section.lines %}
                         <div class="line {% if line.is_comment %}comment{% endif %}">
-                            {% for part in line.parts %}
-                            <span class="chord-wrapper">
-                                {% if part.chord %}
-                                    <span class="chord">{% if part.volta %}<span class="grid-volta">{{ part.volta }}</span>{% endif %}{{ part.chord }}</span>
+                            {% for item in line.parts %}
+                                {% if item.is_volta_group %}
+                                    {% if item.is_anchor %}
+                                        <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                            <span class="volta-number">{{ item.number }}.</span>
+                                            {% for part in item.parts %}
+                                                <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                            {% endfor %}
+
+                                            {% if item.floating_siblings %}
+                                                <span class="volta-stack">
+                                                    {% for sib in item.floating_siblings %}
+                                                        <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                            <span class="volta-number">{{ sib.number }}.</span>
+                                                            {% for sp in sib.parts %}
+                                                                {% if sp.chord %}<span class="chord-wrapper"><span class="chord">{{ sp.chord }}</span></span>{% endif %}
+                                                            {% endfor %}
+                                                        </span>
+                                                    {% endfor %}
+                                                </span>
+                                            {% endif %}
+                                        </span>
+                                    {% else %}
+                                        {# Floating volta in its original position - only show lyrics #}
+                                        {% for part in item.parts %}
+                                            <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
+                                        {% endfor %}
+                                    {% endif %}
+                                {% else %}
+                                    <span class="chord-wrapper">{% if item.chord %}<span class="chord">{% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}{{ item.chord }}</span>{% endif %}<span class="lyrics">{{ item.text }}</span></span>
                                 {% endif %}
-                                <span class="lyrics">{{ part.text }}</span>
-                            </span>
                             {% endfor %}
                         </div>
                         {% endfor %}
