@@ -126,19 +126,63 @@ def main():
                             # Grid cells usually contain simple parts, but if they ever contain VoltaGroups (unlikely given grid parser), this would need update.
                             # Grid parser currently creates Parts directly.
                             cell_parts = [{'chord': p.chord, 'text': p.text} for p in cell.parts]
+
+                            # Determine if measure is essentially empty
+                            is_empty = not cell.is_bar and not any(p.chord or (p.text and p.text.strip()) for p in cell.parts)
+
+                            # Determine bar type for styling
+                            bar_type = 'standard'
+                            if cell.is_bar:
+                                text = cell.text
+                                if ':' in text:
+                                    if text.startswith(':') or text.endswith(':') and len(text) > 1:
+                                        if text.startswith(':') and text.endswith(':'):
+                                            # Rare case of |:| or similar
+                                            bar_type = 'repeat-both'
+                                        elif text.startswith(':'):
+                                            bar_type = 'end-repeat'
+                                        else:
+                                            bar_type = 'start-repeat'
+                                elif len(text) >= 2 and ('||' in text or '//' in text):
+                                    bar_type = 'double-bar'
+
                             current_cell_data = {
                                 'is_bar': cell.is_bar,
                                 'text': cell.text,
+                                'bar_type': bar_type,
                                 'volta': cell.volta,
+                                'is_empty': is_empty,
+                                'is_shifted': False, # Initial state
                                 'parts': cell_parts
                             }
 
-                            # Move volta to previous bar if applicable
-                            # Check if current is measure (not bar), has volta, and there is a previous cell that is a bar
+                             # Move volta to previous bar if applicable
+                            # Check if current is measure (not bar), has volta
                             if not current_cell_data['is_bar'] and current_cell_data['volta']:
+                                # 1. Try to merge with previous repeat if separated by empty measure/bar
+                                # Pattern: [Repeat Bar] -> [Empty Measure] -> [Simple Bar] -> [Current Measure with Volta]
+                                if len(cells_data) >= 3:
+                                    prev_bar = cells_data[-1]
+                                    prev_measure = cells_data[-2]
+                                    repeat_bar = cells_data[-3]
+                                    if (prev_bar['is_bar'] and prev_bar['text'] in ['|', '||'] and
+                                        prev_measure['is_empty'] and
+                                        repeat_bar['is_bar'] and (':' in repeat_bar['text'])):
+
+                                        repeat_bar['volta'] = current_cell_data['volta']
+                                        current_cell_data['volta'] = None
+                                        current_cell_data['is_shifted'] = True
+                                        # Remove redundant intermediate cells
+                                        cells_data.pop() # Remove simple bar
+                                        cells_data.pop() # Remove empty measure
+                                        cells_data.append(current_cell_data)
+                                        continue
+
+                                # 2. Standard move to immediately preceding bar
                                 if cells_data and cells_data[-1]['is_bar']:
                                     cells_data[-1]['volta'] = current_cell_data['volta']
                                     current_cell_data['volta'] = None
+                                    current_cell_data['is_shifted'] = True # Add shift to measure
 
                             cells_data.append(current_cell_data)
 

@@ -46,15 +46,44 @@
                             {% if line.grid_cells %}
                                 {% for cell in line.grid_cells %}
                                     {% if cell.is_bar %}
-                                        <td class="grid-bar">
+                                        <td class="grid-bar bar-{{ cell.bar_type }}">
                                             {% if cell.volta %}
                                                 <span class="grid-volta">{{ cell.volta }}</span>
+                                            {% endif %}
+
+                                            {% if cell.bar_type == 'start-repeat' %}
+                                                <div class="repeat-sign start">
+                                                    <span class="thick-line"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="repeat-dots"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'end-repeat' %}
+                                                <div class="repeat-sign end">
+                                                    <span class="repeat-dots"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="thick-line"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'repeat-both' %}
+                                                <div class="repeat-sign both">
+                                                    <span class="repeat-dots"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="thick-line"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="repeat-dots"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'double-bar' %}
+                                                <div class="repeat-sign double">
+                                                    <span class="thin-line"></span>
+                                                    <span class="thin-line"></span>
+                                                </div>
                                             {% else %}
-                                            {{ cell.text }}
+                                                {% if not cell.volta %}
+                                                    <span class="bar-char">{{ cell.text }}</span>
+                                                {% endif %}
                                             {% endif %}
                                         </td>
                                     {% else %}
-                                        <td class="grid-measure">
+                                        <td class="grid-measure {% if cell.is_shifted %}shifted{% endif %} {% if cell.is_empty %}empty-measure{% endif %}">
                                             {% if cell.volta %}
                                                 <!-- Fallback if volta wasn't moved (e.g. start of line) -->
                                                 <span class="grid-volta">{{ cell.volta }}</span>

@@ -519,89 +519,61 @@ class ChordProParser:
     def _parse_grid_line(self, line_text):
         line_obj = Line()
 
-        # Regex to split by bars.
-        # Detect all bar types: |, ||, :|, |:, |1 (where 1 is volta, handled later), etc.
-        # We look for standard bar delimiters.
-        # Order matters for regex: longest first.
-        tokens = re.split(r'(\|\||:\||\|:|\|)', line_text)
+        # Regex to split by bars, preserving delimiters
+        # Even indices (0, 2, 4...) are content (measures)
+        # Odd indices (1, 3, 5...) are separators (bars)
+        # Supported bars: ||:, :||, |:, :|, ||, |, //:, ://
+        tokens = re.split(r'(\|\|:|:\|\||\|:|:\||\|\||\||//:|://)', line_text)
 
-        for token in tokens:
-            if not token:
+        for i, token in enumerate(tokens):
+            # token can be None if split at the very end with certain regex,
+            # but re.split with capturing group usually returns empty strings.
+            if token is None:
                 continue
 
-            stripped = token.strip()
-
-            # Check if it is a bar
-            if stripped in ['|', '||', ':|', '|:']:
-                # It is a bar
+            if i % 2 == 1:
+                # ODD index -> it's a BAR
+                stripped = token.strip()
                 cell = GridCell(is_bar=True, text=stripped)
                 line_obj.grid_cells.append(cell)
             else:
-                # It is content (measure)
-                # Parse volta and content
-
+                # EVEN index -> it's a MEASURE (content)
+                # Even if it's empty, we add a cell to maintain column indexing
                 content_text = token.strip()
-                if not content_text:
-                    # Empty space between bars or at end?
-                    # If it's just whitespace, we can ignore or add empty cell?
-                    # Usually " | | " -> empty cell in between.
-                    # But if split produced empty string, we already skipped it.
-                    # If token was " ", stripped is "".
-                    # Let's verify:
-                    # "| |" -> split -> "", "|", " ", "|", ""
-                    # " " -> skipped? No, token is " ". stripped is "".
-                    # If we want empty measures to appear, we should handle empty stripped if token was not empty?
-                    # But " " usually is insignificant. " | | " is one empty measure.
-                    # If I skip it, I get Bar, Bar. That looks like "||".
-                    # I need a cell between them if there was space.
-                    # But `re.split` gives " " between "|" and "|".
-                    pass
-
-                # If stripped is empty but token was not, it's whitespace.
-                # If we have `| |`, we want a cell.
-                # But typically we want explicit content.
-                # Let's proceed with parsing content if there is any text.
-
-                if not content_text:
-                    continue
 
                 volta = None
-
-                # Check for volta (starts with number)
-                # Example: "1 Am" -> volta 1
+                # Check for volta (starts with number) or is just a number
                 volta_match = re.match(r'^(\d[\d,\.]*)\s+(.*)', content_text)
                 if volta_match:
                     volta = volta_match.group(1)
+                    if not volta.endswith('.'):
+                        volta += '.'
                     content_text = volta_match.group(2)
                 else:
-                    # Check if it's JUST a number (e.g. "1")
                     volta_match = re.match(r'^(\d[\d,\.]*)$', content_text)
                     if volta_match:
                         volta = volta_match.group(1)
+                        if not volta.endswith('.'):
+                            volta += '.'
                         content_text = ""
 
                 cell = GridCell(is_bar=False, volta=volta)
 
-                # Parse content parts
-                # Split by space to identify chords / text
+                # Parse content parts (chords/text/symbols)
                 sub_tokens = content_text.split()
                 for sub in sub_tokens:
                     if sub == '.':
-                         # Dot replacement -> spacing
                          cell.parts.append(Part(text="  "))
                     elif sub == '/':
                          cell.parts.append(Part(text="/"))
                     elif sub == '%':
                          cell.parts.append(Part(text="%"))
                     else:
-                         # Check if token starts with a note (A-G, H) - treat as chord
-                         # This allows non-standard chords like "Ebh4/Gb" to be recognized
+                         # Chord detection (starts with A-G, H)
                          note_match = re.match(r'^([A-GH])([#b]?)', sub)
                          if note_match:
-                             # Starts with a note - treat as chord (even if pychord doesn't recognize it)
                              cell.parts.append(Part(chord=sub, text=""))
                          else:
-                             # Not a chord, treat as text
                              cell.parts.append(Part(text=sub + " "))
 
                 line_obj.grid_cells.append(cell)

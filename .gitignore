@@ -1,0 +1,8 @@
+old_project/
+__pycache__/
+*.pyc
+.venv/
+venv/
+output_jpg/*.jpg
+output_jpg/*.html
+*.log

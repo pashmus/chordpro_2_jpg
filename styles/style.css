@@ -123,32 +123,103 @@ body {
 
 .grid-bar {
     font-family: 'Courier New', monospace;
-    padding: 0 5px;
+    padding: 0;
     color: #48c9b0; /* Match section border/theme */
     font-weight: bold;
-    width: 10px;
+    width: 20px; /* Fixed width for alignment axis */
     text-align: center;
     vertical-align: middle;
     position: relative; /* Context for volta */
 }
 
+/* Repeat Signs Styling - Refactored for centered axis */
+.repeat-sign {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    height: 1.25em;
+    gap: 1.5px;
+}
+
+.repeat-sign .thick-line {
+    width: 3px;
+    height: 100%;
+    background-color: currentColor;
+    display: block;
+}
+
+.repeat-sign .thin-line {
+    width: 1.2px;
+    height: 100%;
+    background-color: currentColor;
+    display: block;
+}
+
+.repeat-sign .repeat-dots {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+}
+
+.repeat-sign .repeat-dots::before,
+.repeat-sign .repeat-dots::after {
+    content: "";
+    width: 2.2px;
+    height: 2.2px;
+    background-color: currentColor;
+    border-radius: 50%;
+    display: block;
+}
+
+/* Align the 'main' line of the repeat with the 50% axis */
+.repeat-sign.start {
+    padding-left: 6.5px; /* Offset to center the thick line */
+}
+
+.repeat-sign.end {
+    padding-right: 6.5px; /* Offset to center the thick line */
+}
+
 .grid-measure {
     position: relative;
-    padding: 2px 6px;
+    padding: 2px 5px 2px 0px;
     vertical-align: top;
+    white-space: nowrap;
+}
+
+.grid-measure.empty-measure {
+    width: 2px; /* Minimal width to bring bars together */
+    min-width: 2px;
+    padding: 0;
+}
+
+.grid-measure.shifted {
+    padding-left: 11px;
 }
 
 .grid-volta {
     position: absolute;
     top: 1px;
-    right: -8px;
+    left: 50%;
+    transform: translateX(-1px); /* Match 2px border center with bar axis */
     font-size: 11px;
-    color: #888;
+    color: #48c9b0;
     font-weight: bold;
     white-space: nowrap;
-    padding: 0px 8px 2px 2px;
+    padding: 0px 10px 2px 2px;
     border: 2px solid #48c9b0;
     border-width: 2px 0px 0px 2px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Specific shift for volta when following an end-repeat sign */
+.bar-end-repeat .grid-volta {
+    left: calc(50% + 4px); /* Shift right to start after thick line */
 }
 
 .grid-chord {
