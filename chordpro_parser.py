@@ -27,25 +27,26 @@ class Song:
         self.sections = []
 
 
-    def expand_chorus_references(self):
+    def expand_section_references(self):
         """
-        Look for comments that refer to a chorus label (e.g. {comment: Chorus})
-        and replace them with the actual chorus content.
+        Look for comments that refer to a section label (e.g. {comment: Chorus})
+        and replace them with the actual section content.
+        Supports chorus, pre_chorus, and bridge.
         """
-        # 1. Map labels to chorus sections
-        chorus_map = {}
+        # 1. Map labels to sections
+        section_map = {}
         for section in self.sections:
-            if section.type == 'chorus' and section.label:
+            if section.type in ['chorus', 'pre_chorus', 'bridge'] and section.label:
                 # Normalize label: strip whitespace and trailing colon
                 norm_label = section.label.strip().rstrip(':')
 
                 # Prioritize sections with content
                 if section.lines:
-                    chorus_map[norm_label] = section
-                elif norm_label not in chorus_map:
-                    chorus_map[norm_label] = section
+                    section_map[norm_label] = section
+                elif norm_label not in section_map:
+                    section_map[norm_label] = section
 
-        if not chorus_map:
+        if not section_map:
             return
 
         new_sections = []
@@ -63,30 +64,23 @@ class Song:
                 match_found = False
                 if line.is_comment:
                     # Construct text from parts
-                    # Usually comments parsed by _parse_line have one part with text,
-                    # but let's be safe and join all text components.
                     comment_text = "".join(p.text for p in line.parts if p.text).strip()
                     norm_comment = comment_text.rstrip(':')
 
-                    if norm_comment in chorus_map:
+                    if norm_comment in section_map:
                         match_found = True
-                        referenced_chorus = chorus_map[norm_comment]
+                        referenced_section = section_map[norm_comment]
 
                         # 1. Flush current lines to a section (if any)
-                        # We use the original section's metadata
-                        # If we have lines accumulated, we create a section chunk
                         if current_lines:
-                            # We create a new section of the same type/label
-                            # Only if there were lines before this comment
                             sub_section = Section(type=section.type, label=section.label)
                             sub_section.lines = current_lines
                             new_sections.append(sub_section)
                             current_lines = []
 
-                        # 2. Add the referenced chorus (Deep Copy)
-                        # We don't want to modify the original chorus if we change this one later (though we re-generate)
-                        chorus_copy = copy.deepcopy(referenced_chorus)
-                        new_sections.append(chorus_copy)
+                        # 2. Add the referenced section (Deep Copy)
+                        section_copy = copy.deepcopy(referenced_section)
+                        new_sections.append(section_copy)
 
                         # Note: We do NOT add the comment line itself. It is replaced.
 
@@ -95,20 +89,6 @@ class Song:
 
             # Flush remaining lines
             if current_lines:
-                # If we split the section, the subsequent parts generally inherit the label/type
-                # Example: Verse 1 -> Chorus -> Verse 1 (cont)
-                # However, usually {comment: Chorus} is at the end of a block.
-                # If it was the only line, we might be creating an empty section if we didn't check current_lines?
-                # But current_lines was initialized empty. If loop finished and we added nothing, we add nothing.
-                # BUT if the original section had lines and we didn't split, we just rebuild it.
-                # If the original section was JUST the comment, current_lines is empty.
-                # We should be careful about empty sections?
-                # If we replaced the only line with a chorus section, we don't want an empty "Verse" section before/after.
-                # Logic:
-                # If `current_lines` is populated, we add it.
-                # If `current_lines` is empty, we don't add a section.
-                # UNLESS the original section was empty? (Not possible as we iterate lines)
-
                 sub_section = Section(type=section.type, label=section.label)
                 sub_section.lines = current_lines
                 new_sections.append(sub_section)
@@ -511,8 +491,8 @@ class ChordProParser:
 
             current_section.lines.append(parsed_line)
 
-        # Post-process: Expand chorus references
-        song.expand_chorus_references()
+        # Post-process: Expand chorus references (Moved to caller control)
+        # song.expand_chorus_references()
 
         return song
 

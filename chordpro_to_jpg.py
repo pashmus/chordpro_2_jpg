@@ -20,6 +20,8 @@ def main():
                             help="Real B Chord: Input 'B' is B natural, 'Bb' is B flat. Default (without this flag) is German input: 'B' is B flat, 'H' is B natural.")
     cli_parser.add_argument("--layout", "-l", type=str, default="sidebar", choices=["standard", "sidebar"],
                             help="Layout type: 'sidebar' (default) or 'standard'")
+    cli_parser.add_argument("--expand-chorus", "-ex", action="store_true",
+                            help="Expand section references: replace comments that match section labels (chorus, pre-chorus, bridge) with the actual content.")
 
     args = cli_parser.parse_args()
 
@@ -58,6 +60,11 @@ def main():
                 print(f"Transposing by {args.transpose} semitones...")
 
             song.transpose(args.transpose, rbc_mode=args.rbc)
+
+            # Optional: Expand section references
+            if args.expand_chorus:
+                print("Expanding section references...")
+                song.expand_section_references()
 
 
 

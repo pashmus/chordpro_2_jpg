@@ -56,7 +56,7 @@ python converter.py
 | `-t` | `--transpose` | Транспонирование аккордов на указанное количество полутонов. | `python converter.py -t 2` (поднять на 1 тон) |
 | `-r` | `--rbc` | **Real B Chord**. Режим английской нотации на входе. См. раздел [Нотация](#-нотация-b-vs-h). | `python converter.py --rbc` |
 | `-l` | `--layout` | Выбор макета страницы. Варианты: `standard` или `sidebar`(по умолчанию). | `python converter.py -l standard` |
-| | `--no-align` | Отключает "умное" выравнивание аккордов по центру над текстом. | `python converter.py --no-align` |
+| `-ex` | `--expand-chorus` | Разворачивать ссылки на секции (заменять комментарии с названием припева, пре-припева или бриджа на их текст). | `python converter.py -ex` |
 
 ---
 
