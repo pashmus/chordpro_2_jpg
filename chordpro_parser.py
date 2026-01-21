@@ -334,7 +334,7 @@ class Song:
 
 class Section:
     def __init__(self, type="verse", label=""):
-        self.type = type # verse, chorus, bridge, grid (instrumental)
+        self.type = type # verse, chorus, bridge, grid (instrumental), comment
         self.label = label
         self.lines = []
 
@@ -442,14 +442,18 @@ class ChordProParser:
                     song.sections.append(current_section)
 
                 elif key in ['c', 'comment']:
-                     # Parse the comment content for chords
+                    # Parse the comment content for chords
                     parsed_line = self._parse_line(value)
                     parsed_line.is_comment = True
 
-                    if current_section is None:
-                        current_section = Section(type="verse", label="")
-                        song.sections.append(current_section)
-                    current_section.lines.append(parsed_line)
+                    # Create a NEW section for each comment
+                    # Метка оставляется пустой, чтобы не дублировать текст комментария
+                    comment_section = Section(type="comment", label="")
+                    comment_section.lines.append(parsed_line)
+                    song.sections.append(comment_section)
+
+                    # Reset current_section to ensure next comment creates a new section
+                    current_section = None
 
                 # Section End (we mainly just finish the current section,
                 # effectively doing nothing as the next section start will handle creation,

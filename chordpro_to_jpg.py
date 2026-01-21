@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import re
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from chordpro_parser import ChordProParser
@@ -10,6 +11,22 @@ INPUT_DIR = 'input_cho'
 OUTPUT_DIR = 'output_jpg'
 TEMPLATE_DIR = 'templates'
 STYLES_DIR = 'styles'
+
+
+def get_special_style(text):
+    """
+    Returns 'chorus', 'pre_chorus', 'bridge' or None based on the text prefix.
+    """
+    if not text:
+        return None
+    t = text.strip()
+    if t.startswith('Пр.') or t.startswith('Припев'):
+        return 'chorus'
+    if t.startswith('Пре-пр'):
+        return 'pre_chorus'
+    if t.startswith('Bridge') or t.startswith('Бридж'):
+        return 'bridge'
+    return None
 
 
 def main():
@@ -105,6 +122,11 @@ def main():
                             'volta': item.volta,
                             'is_volta_group': False
                         }
+
+                # Check for special marker (empty section with specific label)
+                special_style = None
+                if not sec.lines and sec.label:
+                    special_style = get_special_style(sec.label)
 
                 # Check alignment for the section label (for sidebar layout)
                 # We look at the first line to decide if we need to offset the label.
@@ -215,16 +237,25 @@ def main():
                             else:
                                 parts_data.append(serialize_item(part))
 
+                        line_special_style = None
+                        is_comment = getattr(line, 'is_comment', False)
+                        if is_comment:
+                            # Construct text from parts to check for special style
+                            comment_text = "".join(p.text for p in line.parts if p.text)
+                            line_special_style = get_special_style(comment_text)
+
                         lines_data.append({
                             'parts': parts_data,
-                            'is_comment': getattr(line, 'is_comment', False)
+                            'is_comment': is_comment,
+                            'special_style': line_special_style
                         })
 
                 sections_data.append({
                     'type': sec.type,
                     'label': sec.label,
                     'lines': lines_data,
-                    'offset_label': offset_label
+                    'offset_label': offset_label,
+                    'special_style': special_style
                 })
 
             context = {
