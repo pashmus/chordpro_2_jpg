@@ -61,11 +61,7 @@ class ChordProParser:
                     song.sections.append(current_section)
                 elif key == "chorus":
                     label = value if value else "Пр."  # Item 2: Handle bare {chorus}
-                    # Also check for Pre-chorus shorthand if it exists (unlikely but safe)
-                    if label.lower().startswith("пре-пр"):
-                        current_section = Section(type="pre_chorus", label=label)
-                    else:
-                        current_section = Section(type="chorus", label=label)
+                    current_section = Section(type="chorus", label=label)
                     song.sections.append(current_section)
                     current_section = None
                 elif key in ["sov", "start_of_verse"]:

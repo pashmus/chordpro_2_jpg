@@ -4,7 +4,7 @@
     --chord-color: #e74c3c;
     --chorus-bg-color: #e1edfc;  /* Привязано к .layout-sidebar .section.chorus .section-content */
     --pre-chorus-bg-color: #f5f9ff;  /* Привязано к .layout-sidebar .section.pre_chorus .section-content */
-    --bridge-bg-color: #fff9f0;  /* Привязано к .layout-sidebar .section.bridge .section-content */
+    --bridge-bg-color: #fff3e1;  /* Привязано к .layout-sidebar .section.bridge .section-content */
 }
 body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -48,11 +48,11 @@ body {
 }
 
 .section {
-    margin-bottom: 15px;
+    margin-bottom: 17px;
     page-break-inside: avoid;
 }
 
-.section.verse { margin-bottom: 20px; }
+.section.verse { margin-bottom: 17px; }
 
 .layout-sidebar .section.verse .section-content { padding: 5px; }
 
@@ -73,7 +73,6 @@ body {
 /* Empty Chorus (Standard Layout) */
 .section.chorus.section-empty {
     /* Use standard chorus styles but add extra margin */
-    margin-top: 25px;
     margin-bottom: 20px;
 }
 
@@ -412,6 +411,8 @@ body {
 }
 
 .layout-sidebar .section-content {
+    padding-top: 0px;
+    padding-bottom: 0px;
     flex-grow: 1;
     width: auto;
 }
@@ -451,11 +452,13 @@ body {
 .layout-sidebar .section.chorus.section-empty .section-content {
     background-color: transparent;
     /*padding: 0;*/
+    padding-top: 0px;
+    padding-bottom: 0px;
     border: none;
 }
 
 .layout-sidebar .section.chorus.section-empty {
-    margin-top: 20px;
+    margin-top: 0px;
     margin-bottom: 15px;
 }
 
