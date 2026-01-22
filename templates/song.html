@@ -33,14 +33,26 @@
             {% for section in sections %}
             <div class="section {{ section.type }} {% if not section.lines %}section-empty{% endif %} {% if section.offset_label %}offset-label{% endif %} {% if section.label == 'Tag:' %}section-tag{% endif %}">
                 {% if section.label or layout == 'sidebar' %}
-                <div class="section-label">
-                    {% if section.offset_label %}<br/>{% endif %}
-                    {{ section.label }}</div>
+                    {% if not section.lines and section.special_style %}
+                    <div class="section-label">
+                        {# Empty section with special style - label will be shown in section-content #}
+                    </div>
+                    {% else %}
+                        <div class="section-label">
+                            {% if section.offset_label %}<br/>{% endif %}
+                            {{ section.label }}</div>
+                    {% endif %}
                 {% endif %}
 
                 <div class="section-content">
-                    {% if section.type == 'grid' %}
-                    <table class="grid-table">
+                    {% if not section.lines and section.special_style %}
+                        {# Empty section with special style - display as section-reference #}
+                        <div class="section-reference {{ section.special_style }}">
+                            <span class="lyrics">{{ section.label }}</span>
+                        </div>
+                    {% else %}
+                        {% if section.type == 'grid' %}
+                        <table class="grid-table">
                         {% for line in section.lines %}
                         <tr>
                             {% if line.grid_cells %}
@@ -106,10 +118,48 @@
                             {% endif %}
                         </tr>
                         {% endfor %}
-                    </table>
-                    {% else %}
-                        {% for line in section.lines %}
-                        <div class="line {% if line.is_comment %}comment{% endif %}">
+                        </table>
+                        {% else %}
+                            {% for line in section.lines %}
+                            {% if line.special_style %}
+                                {# Comment with special style - use section-reference class #}
+                                <div class="section-reference {{ line.special_style }}">
+                                    {% for item in line.parts %}
+                                        {% if item.is_volta_group %}
+                                            {% if item.is_anchor %}
+                                                <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                                    <span class="volta-number">{{ item.number }}.</span>
+                                                    {% for part in item.parts %}
+                                                        <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                                    {% endfor %}
+
+                                                    {% if item.floating_siblings %}
+                                                        <span class="volta-stack">
+                                                            {% for sib in item.floating_siblings %}
+                                                                <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                                    <span class="volta-number">{{ sib.number }}.</span>
+                                                                    {% for sp in sib.parts %}
+                                                                        {% if sp.chord %}<span class="chord-wrapper"><span class="chord">{{ sp.chord }}</span></span>{% endif %}
+                                                                    {% endfor %}
+                                                                </span>
+                                                            {% endfor %}
+                                                        </span>
+                                                    {% endif %}
+                                                </span>
+                                            {% else %}
+                                                {# Floating volta in its original position - only show lyrics #}
+                                                {% for part in item.parts %}
+                                                    <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
+                                                {% endfor %}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="chord-wrapper">{% if item.chord %}<span class="chord">{% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}{{ item.chord }}</span>{% endif %}<span class="lyrics">{{ item.text }}</span></span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {# Regular line or comment without special style #}
+                                <div class="line {% if line.is_comment %}comment{% endif %}">
                             {% for item in line.parts %}
                                 {% if item.is_volta_group %}
                                     {% if item.is_anchor %}
@@ -142,8 +192,10 @@
                                     <span class="chord-wrapper">{% if item.chord %}<span class="chord">{% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}{{ item.chord }}</span>{% endif %}<span class="lyrics">{{ item.text }}</span></span>
                                 {% endif %}
                             {% endfor %}
-                        </div>
+                                </div>
+                            {% endif %}
                         {% endfor %}
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>

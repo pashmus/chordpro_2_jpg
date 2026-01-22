@@ -6,3 +6,4 @@ venv/
 output_jpg/*.jpg
 output_jpg/*.html
 *.log
+backup_2026_01_22/

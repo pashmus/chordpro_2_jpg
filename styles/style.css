@@ -2,6 +2,9 @@
     --indent-text: 0px;
     --indent-chord: calc(var(--indent-text) + 16px);
     --chord-color: #e74c3c;
+    --chorus-bg-color: #e1edfc;  /* Привязано к .layout-sidebar .section.chorus .section-content */
+    --pre-chorus-bg-color: #f5f9ff;  /* Привязано к .layout-sidebar .section.pre_chorus .section-content */
+    --bridge-bg-color: #fff9f0;  /* Привязано к .layout-sidebar .section.bridge .section-content */
 }
 body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -330,6 +333,68 @@ body {
     color: #555;
 }
 
+/* Section Reference Styles (for {chorus: text} and {comment: text} with special patterns) */
+.section-reference {
+    display: inline-block;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 14px;
+    color: #606b6c;
+    min-width: 120px;
+    width: max-content;
+    padding: 1px 8px;
+    margin-left: -40px;
+    border-radius: 4px;
+    line-height: 1.5;
+    white-space: normal;
+}
+
+.section-reference .chord-wrapper {
+    display: inline;
+    flex-direction: row;
+    margin-right: 0;
+}
+
+.section-reference .chord {
+    display: inline;
+    font-size: 16px;
+    margin-bottom: 0;
+    height: auto;
+    padding-right: 0;
+}
+
+.section-reference .lyrics {
+    display: inline;
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: bold;
+    color: #606b6c;
+    white-space: normal;
+    height: auto;
+}
+
+.section-reference.chorus {
+    background-color: var(--chorus-bg-color);
+    color: #2c3e50;
+}
+
+.section-reference.pre_chorus {
+    background-color: var(--pre-chorus-bg-color);
+    color: #2c3e50;
+}
+
+.section-reference.bridge {
+    background-color: var(--bridge-bg-color);
+    color: #2c3e50;
+}
+
+/* Special positioning for empty chorus sections in section-content */
+/* Comments have margin-left: -10px from .line.comment, so for empty sections we need to compensate */
+/* To match comment positioning: -40px (base) - 10px (comment's margin-left) = -50px */
+.section-content > .section-reference {
+    margin-left: -50px;
+}
+
 /* --- Sidebar Layout --- */
 .layout-sidebar .section {
     display: flex;
@@ -371,13 +436,13 @@ body {
 
 /* Apply Box Styles to Content in Sidebar */
 .layout-sidebar .section.chorus .section-content {
-    background-color: #e1edfc;
+    background-color: var(--chorus-bg-color);
     border-left: 5px solid #3498db;
     border-radius: 6px;
 }
 
 .layout-sidebar .section.pre_chorus .section-content {
-    background-color: #f5f9ff;
+    background-color: var(--pre-chorus-bg-color);
     border-left: 5px solid #9ca8b9;
     border-radius: 6px;
 }
@@ -385,7 +450,7 @@ body {
 /* Empty Chorus (Sidebar Layout) */
 .layout-sidebar .section.chorus.section-empty .section-content {
     background-color: transparent;
-    padding: 0;
+    /*padding: 0;*/
     border: none;
 }
 
@@ -395,7 +460,7 @@ body {
 }
 
 .layout-sidebar .section.bridge .section-content {
-    background-color: #fff9f0;
+    background-color: var(--bridge-bg-color);
     border-left: 5px solid #e67e22;
     border-radius: 6px;
 }
