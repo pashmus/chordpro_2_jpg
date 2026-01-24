@@ -35,7 +35,7 @@
                 {% if section.label or layout == 'sidebar' %}
                     {% if not section.lines and section.special_style %}
                     <div class="section-label">
-                        {# Empty section with special style - label will be shown in section-content #}
+                        {# Пустая секция со специальным стилем — метка будет в section-content #}
                     </div>
                     {% else %}
                         <div class="section-label">
@@ -46,7 +46,7 @@
 
                 <div class="section-content">
                     {% if not section.lines and section.special_style %}
-                        {# Empty section with special style - display as section-reference #}
+                        {# Пустая секция со специальным стилем — отображать как section-reference #}
                         <div class="section-reference {{ section.special_style }}">
                             <span class="lyrics">{{ section.label }}</span>
                         </div>
@@ -97,7 +97,7 @@
                                     {% else %}
                                         <td class="grid-measure {% if cell.is_shifted %}shifted{% endif %} {% if cell.is_empty %}empty-measure{% endif %}">
                                             {% if cell.volta %}
-                                                <!-- Fallback if volta wasn't moved (e.g. start of line) -->
+                                                <!-- Запасной вариант, если volta не перенесена (напр. начало строки) -->
                                                 <span class="grid-volta">{{ cell.volta }}</span>
                                             {% endif %}
                                             {% for part in cell.parts %}
@@ -111,7 +111,7 @@
                                     {% endif %}
                                 {% endfor %}
                             {% else %}
-                                <!-- Fallback if grid parsing failed or empty -->
+                                <!-- Запасной вариант при ошибке разбора сетки или пустой -->
                                 <td colspan="100%">
                                     {% for part in line.parts %}{{ part.text or part.chord }}{% endfor %}
                                 </td>
@@ -122,7 +122,7 @@
                         {% else %}
                             {% for line in section.lines %}
                             {% if line.special_style %}
-                                {# Comment with special style - use section-reference class #}
+                                {# Комментарий со специальным стилем — класс section-reference #}
                                 <div class="section-reference {{ line.special_style }}">
                                     {% for item in line.parts %}
                                         {% if item.is_volta_group %}
@@ -147,7 +147,7 @@
                                                     {% endif %}
                                                 </span>
                                             {% else %}
-                                                {# Floating volta in its original position - only show lyrics #}
+                                                {# Плавающая volta на исходной позиции — только текст #}
                                                 {% for part in item.parts %}
                                                     <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
                                                 {% endfor %}
@@ -158,7 +158,7 @@
                                     {% endfor %}
                                 </div>
                             {% else %}
-                                {# Regular line or comment without special style #}
+                                {# Обычная строка или комментарий без специального стиля #}
                                 <div class="line {% if line.is_comment %}comment{% endif %}">
                             {% for item in line.parts %}
                                 {% if item.is_volta_group %}
@@ -183,7 +183,7 @@
                                             {% endif %}
                                         </span>
                                     {% else %}
-                                        {# Floating volta in its original position - only show lyrics #}
+                                        {# Плавающая volta на исходной позиции — только текст #}
                                         {% for part in item.parts %}
                                             <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
                                         {% endfor %}
