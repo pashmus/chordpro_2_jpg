@@ -17,25 +17,26 @@ body {
 
 .song-container {
     background: #fff;
-    padding: 20px 20px 20px 18px;
+    padding: 17px 8px 10px 12px;
     box-sizing: border-box;
     display: inline-block; /* Подстройка под содержимое */
 }
 
 .song-header {
     border-bottom: 2px solid #eee;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: 8px;
+    padding-bottom: 7px;
 }
 
 .song-title {
     font-size: 28px;
-    margin: 0 0 10px 0;
+    margin: 0 0 7px 10px;
     color: #2c3e50;
     text-align: left;
 }
 
 .song-meta {
+    margin-left: 10px;
     font-size: 16px;
     color: #606b6c;
     display: flex;
