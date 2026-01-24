@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from chordpro import ChordProParser
 
-# Configuration
+# Конфигурация
 INPUT_DIR = 'input_cho'
 OUTPUT_DIR = 'output_jpg'
 TEMPLATE_DIR = 'templates'
@@ -12,27 +12,20 @@ TEMPLATE_DIR = 'templates'
 
 def get_special_style(text):
     """
-    Returns 'chorus', 'pre_chorus', 'bridge' or None based on the text prefix.
-    Patterns:
-    - "Пр." (strictly with dot) or "Припев" (without dot) → 'chorus'
-    - "Пре-пр" (without dot) → 'pre_chorus'
-    - "Bridge" or "Бридж" (case-insensitive) → 'bridge'
+    Возвращает 'chorus', 'pre_chorus', 'bridge' или None по префиксу текста.
+    Шаблоны: "Пр." или "Припев" → chorus; "Пре-пр" → pre_chorus; "Bridge" или "Бридж" → bridge.
     """
     if not text:
         return None
     t = text.strip()
-    # Check for "Пр." (strictly with dot immediately after "Пр")
-    if t.startswith('Пр.'):
+    # Проверка на "Пр.", "Припев"
+    if t.lower().startswith('пр.') or t.lower().startswith('припев'):
         return 'chorus'
-    # Check for "Припев" (without dot)
-    if t.startswith('Припев'):
-        return 'chorus'
-    # Check for "Пре-пр" (without dot)
-    if t.startswith('Пре-пр'):
+    # Check for "Пре-пр"
+    if t.lower().startswith("пре-пр") or t.lower().startswith("пред-пр") or t.lower().startswith("препр") or t.lower().startswith("предпр"):
         return 'pre_chorus'
-    # Check for "Bridge" or "Бридж" (case-insensitive)
-    t_lower = t.lower()
-    if t_lower.startswith('bridge') or t_lower.startswith('бридж'):
+    # Проверка на "Bridge" или "Бридж"
+    if t.lower().startswith('bridge') or t.lower().startswith('бридж'):
         return 'bridge'
     return None
 
@@ -118,19 +111,19 @@ def build_sections_data(song):
             continue
         lines_data = []
 
-        # Check for special marker (empty section with specific label)
+        # Проверка специального маркера (пустая секция с заданной меткой)
         special_style = None
         if not sec.lines and sec.label:
             special_style = get_special_style(sec.label)
-            # For empty chorus sections, if no pattern matches, default to 'chorus' style
+            # Для пустых припевов: при отсутствии совпадений — стиль 'chorus' по умолчанию
             if special_style is None and sec.type == "chorus":
                 special_style = "chorus"
 
-        # Check alignment for the section label (for sidebar layout)
+        # Проверка выравнивания метки секции (для sidebar layout)
         offset_label = False
         if sec.lines:
             first_line = sec.lines[0]
-            # Check if first line has both chords and text
+            # Проверка: в первой строке есть и аккорды, и текст
             has_chords = False
             has_text = False
 
@@ -141,7 +134,7 @@ def build_sections_data(song):
                 if part.text and part.text.strip():
                     has_text = True
 
-            # If we have both chords and text, we need to offset the label to align with lyrics
+            # Если есть и аккорды, и текст — сдвигаем метку для выравнивания с текстом
             if has_chords and has_text:
                 offset_label = True
 
@@ -149,23 +142,22 @@ def build_sections_data(song):
             if sec.type == "grid" and hasattr(line, "grid_cells") and line.grid_cells:
                 cells_data = []
                 for cell in line.grid_cells:
-                    # Grid cells usually contain simple parts, but if they ever contain
-                    # VoltaGroups (unlikely given grid parser), this would need update.
+                    # Ячейки сетки — простые Part; при появлении VoltaGroup потребуется доработка
                     cell_parts = [{"chord": p.chord, "text": p.text} for p in cell.parts]
 
-                    # Determine if measure is essentially empty
+                    # Проверка: такт по сути пустой
                     is_empty = not cell.is_bar and not any(
                         p.chord or (p.text and p.text.strip()) for p in cell.parts
                     )
 
-                    # Determine bar type for styling
+                    # Тип черты для стилизации
                     bar_type = "standard"
                     if cell.is_bar:
                         text = cell.text
                         if ":" in text:
                             if text.startswith(":") or text.endswith(":") and len(text) > 1:
                                 if text.startswith(":") and text.endswith(":"):
-                                    # Rare case of |:| or similar
+                                    # Редкий случай |:| и т.п.
                                     bar_type = "repeat-both"
                                 elif text.startswith(":"):
                                     bar_type = "end-repeat"
@@ -180,16 +172,15 @@ def build_sections_data(song):
                         "bar_type": bar_type,
                         "volta": cell.volta,
                         "is_empty": is_empty,
-                        "is_shifted": False,  # Initial state
+                        "is_shifted": False,  # Начальное состояние
                         "parts": cell_parts,
                     }
 
-                    # Move volta to previous bar if applicable
-                    # Check if current is measure (not bar), has volta
+                    # Перенос volta на предыдущую черту при необходимости
+                    # Текущая ячейка — такт (не черта) и есть volta
                     if not current_cell_data["is_bar"] and current_cell_data["volta"]:
-                        # 1. Try to merge with previous repeat if separated by empty measure/bar
-                        # Pattern: [Repeat Bar] -> [Empty Measure] -> [Simple Bar]
-                        # -> [Current Measure with Volta]
+                        # 1. Попытка объединить с предыдущим повтором при пустом такте/черте между
+                        # Схема: [черта повтора] -> [пустой такт] -> [простая черта] -> [текущий такт с volta]
                         if len(cells_data) >= 3:
                             prev_bar = cells_data[-1]
                             prev_measure = cells_data[-2]
@@ -204,23 +195,23 @@ def build_sections_data(song):
                                 repeat_bar["volta"] = current_cell_data["volta"]
                                 current_cell_data["volta"] = None
                                 current_cell_data["is_shifted"] = True
-                                # Remove redundant intermediate cells
-                                cells_data.pop()  # Remove simple bar
-                                cells_data.pop()  # Remove empty measure
+                                # Удалить лишние промежуточные ячейки
+                                cells_data.pop()  # Удалить простую черту
+                                cells_data.pop()  # Удалить пустой такт
                                 cells_data.append(current_cell_data)
                                 continue
 
-                        # 2. Standard move to immediately preceding bar
+                        # 2. Обычный перенос на непосредственно предыдущую черту
                         if cells_data and cells_data[-1]["is_bar"]:
                             cells_data[-1]["volta"] = current_cell_data["volta"]
                             current_cell_data["volta"] = None
-                            current_cell_data["is_shifted"] = True  # Add shift to measure
+                            current_cell_data["is_shifted"] = True  # Сдвиг такта
 
                     cells_data.append(current_cell_data)
 
                 lines_data.append({"grid_cells": cells_data, "is_comment": False})
             else:
-                # Identify voltas in this line to handle stack logic
+                # Найти voltas в строке для логики стека
                 line_voltas = [
                     p
                     for p in line.parts
@@ -249,7 +240,7 @@ def build_sections_data(song):
                 line_special_style = None
                 is_comment = getattr(line, "is_comment", False)
                 if is_comment:
-                    # Construct text from parts to check for special style
+                    # Собрать текст из частей для проверки специального стиля
                     comment_text = "".join(p.text for p in line.parts if p.text)
                     line_special_style = get_special_style(comment_text)
 
@@ -293,14 +284,13 @@ def render_song_to_html(song, template, layout):
 
 
 def apply_transforms(song, args):
-    # Always process to ensure correct German output notation (H=Si, B=Si b)
-    # The rbc_mode flag controls how INPUT is interpreted.
+    # Всегда обрабатываем для корректной немецкой нотации (H=Си, B=Си бемоль). rbc_mode задаёт интерпретацию входа.
     if args.transpose != 0:
         print(f"Transposing by {args.transpose} semitones...")
 
     song.transpose(args.transpose, rbc_mode=args.rbc)
 
-    # Optional: Expand section references
+    # Опция: раскрыть ссылки на секции
     if args.expand_chorus:
         print("Expanding section references...")
         song.expand_section_references()
@@ -309,25 +299,25 @@ def apply_transforms(song, args):
 def render_song_to_files(filename, song, template, browser, layout):
     html_content = render_song_to_html(song, template, layout)
 
-    # Save temporary HTML file
+    # Сохранить временный HTML
     temp_html_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"{filename}.html"))
     with open(temp_html_path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    # Render to JPG
-    # Set a specific width, height can be null/0 for full page
+    # Рендер в JPG
+    # Ширина задана; высота null/0 — на всю страницу
     page = browser.new_page(viewport={"width": 800, "height": 600})
 
     file_url = f"file://{temp_html_path}"
     page.goto(file_url)
 
-    # Wait a bit for layout to settle (though usually instant for local static)
+    # Небольшая пауза для стабилизации вёрстки (для локального статического обычно мгновенно)
     # page.wait_for_timeout(100)
 
     output_filename = os.path.splitext(filename)[0] + ".jpg"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
 
-    # Take screenshot of the song container to ensure we don't get infinite height or extra bg
+    # Скриншот контейнера песни, чтобы избежать бесконечной высоты и лишнего фона
     locator = page.locator(".song-container")
     locator.screenshot(path=output_path, type="jpeg", quality=90)
 
@@ -338,15 +328,15 @@ def render_song_to_files(filename, song, template, browser, layout):
 def main():
     args = parse_args()
 
-    # Ensure output directory exists
+    # Создать выходную директорию при отсутствии
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Initialize Parser and Template
+    # Инициализация парсера и шаблона
     parser = ChordProParser()
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
     template = env.get_template("song.html")
 
-    # Find files
+    # Поиск файлов
     files = find_input_files(INPUT_DIR)
 
     if not files:
@@ -354,14 +344,14 @@ def main():
         return
 
     with sync_playwright() as p:
-        # Launch browser
+        # Запуск браузера
         browser = p.chromium.launch()
 
         for filename in files:
             print(f"Processing {filename}...")
             filepath = os.path.join(INPUT_DIR, filename)
 
-            # Read and Parse
+            # Чтение и разбор
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
 

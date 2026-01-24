@@ -5,9 +5,9 @@ from pychord.constants import qualities
 
 from .models import Section
 
-# --- Patch pychord qualities ---
-# Register missing qualities like Emaj7-5 (maj7-5 / maj7b5)
-# Intervals: Root(0), Major 3rd(4), Diminished 5th(6), Major 7th(11) -> (0, 4, 6, 11)
+# --- Патч квалификаторов (свойств) pychord ---
+# Регистрация отсутствующих квалификаторов (свойств), напр. Emaj7-5 (maj7-5 / maj7b5)
+# Интервалы: тоника(0), большая терция(4), уменьшённая квинта(6), большая септима(11) -> (0, 4, 6, 11)
 if not any(q[0] == "maj7-5" for q in qualities.DEFAULT_QUALITIES):
     qualities.DEFAULT_QUALITIES.append(("maj7-5", (0, 4, 6, 11)))
 
@@ -30,18 +30,17 @@ class Song:
 
     def expand_section_references(self):
         """
-        Look for comments that refer to a section label (e.g. {comment: Chorus})
-        and replace them with the actual section content.
-        Supports chorus, pre_chorus, and bridge.
+        Ищет комментарии-ссылки на секцию (напр. {comment: Припев}) и подставляет содержимое.
+        Поддержка: припев, пре-припев, бридж.
         """
-        # 1. Map labels to sections
+        # 1. Сопоставить метки и секции
         section_map = {}
         for section in self.sections:
             if section.type in ["chorus", "pre_chorus", "bridge"] and section.label:
-                # Normalize label: strip whitespace and trailing colon
+                # Нормализация метки: обрезка пробелов и завершающего двоеточия
                 norm_label = section.label.strip().rstrip(":")
 
-                # Prioritize sections with content
+                # Приоритет у секций с содержимым
                 if section.lines:
                     section_map[norm_label] = section
                 elif norm_label not in section_map:
@@ -57,14 +56,14 @@ class Song:
                 new_sections.append(section)
                 continue
 
-            # Buffer for lines in the current section fragment
+            # Буфер строк текущего фрагмента секции
             current_lines = []
 
             for line in section.lines:
-                # Check if this line is a comment reference
+                # Проверка: строка — ссылка на секцию (комментарий)
                 match_found = False
                 if line.is_comment:
-                    # Construct text from parts
+                    # Собрать текст из Part
                     comment_text = "".join(p.text for p in line.parts if p.text).strip()
                     norm_comment = comment_text.rstrip(":")
 
@@ -72,23 +71,23 @@ class Song:
                         match_found = True
                         referenced_section = section_map[norm_comment]
 
-                        # 1. Flush current lines to a section (if any)
+                        # 1. Сбросить накопленные строки в секцию (если есть)
                         if current_lines:
                             sub_section = Section(type=section.type, label=section.label)
                             sub_section.lines = current_lines
                             new_sections.append(sub_section)
                             current_lines = []
 
-                        # 2. Add the referenced section (Deep Copy)
+                        # 2. Добавить секцию-ссылку (глубокая копия)
                         section_copy = copy.deepcopy(referenced_section)
                         new_sections.append(section_copy)
 
-                        # Note: We do NOT add the comment line itself. It is replaced.
+                        # Строку-комментарий не добавляем — она заменяется.
 
                 if not match_found:
                     current_lines.append(line)
 
-            # Flush remaining lines
+            # Сбросить оставшиеся строки
             if current_lines:
                 sub_section = Section(type=section.type, label=section.label)
                 sub_section.lines = current_lines
@@ -228,65 +227,25 @@ class Song:
 
     def transpose(self, semitones, rbc_mode=False):
         """
-        Transpose all chords in the song by the given number of semitones.
-
-        Input Interpretation:
-        - Default (rbc_mode=False): German Input. 'B' = Bb, 'H' = B.
-        - rbc_mode=True: English Input (Real B Chord). 'B' = B, 'Bb' = Bb.
-
-        Output Format:
-        - Always German Output. Internal 'B' -> 'H', Internal 'Bb' -> 'B'.
+        Транспонировать все аккорды на заданное число полутонов.
+        Интерпретация входа: по умолчанию (rbc_mode=False) — немецкий ввод (B=Bb, H=B);
+        rbc_mode=True — английский (B=B, Bb=Bb). Выход всегда в немецкой нотации: B->H, Bb->B.
         """
-        # Note: We run this even if semitones == 0 to normalize the notation to German Output.
+        # Выполняем и при semitones == 0 для нормализации в немецкую нотацию.
 
-        # Helper functions for notation conversion (not used)
-        def normalize_input(chord_str, is_rbc):
-            """Convert input string to standard English Pychord notation."""
-            s = chord_str
-            # Always handle H -> B (Si natural) as a convenience/safety even in RBC mode,
-            # though strictly RBC implies English B.
-            # But primarily:
-            if not is_rbc:
-                # German Input Mode:
-                # H -> B (Si natural)
-                # B -> Bb (Si flat)
-                temp = "###TEMP###"
-                s = s.replace("H", temp)
-                s = s.replace("B", "Bb")
-                s = s.replace(temp, "B")
-            else:
-                # RBC Mode (English Input):
-                # B -> B (No change)
-                # Bb -> Bb (No change)
-                # We still map H -> B just in case user mixed it up, as pychord doesn't know H.
-                s = s.replace("H", "B")
-            return s
-
-        # Helper function to format output (not used)
-        def format_output(chord_str):
-            """Convert standard English Pychord notation to German Output."""
-            # B -> H (Si natural)
-            # Bb -> B (Si flat)
-            temp = "###TEMP###"
-            s = chord_str.replace("Bb", temp)
-            s = s.replace("B", "H")
-            s = s.replace(temp, "B")
-            return s
-
-        # Determine current key
-        # If no key is specified, default to 'C'
+        # Определить текущую тональность
+        # Если тональность не указана — по умолчанию C
         current_key = self.key if self.key else "C"
 
-        # Calculate new key
-        # transpose_note(note, semitones, scale)
-        # We usually transpose the key relative to C to find the new root
+        # Вычислить новую тональность
+        # transpose_note(нота, полутоны, строй); тональность обычно транспонируем от C для нового тонического звука
         new_key = transpose_note(current_key, semitones, "C")
 
-        # Update the song key
+        # Обновить тональность в песне
         self.key = new_key
 
         def collect_parts(items):
-            """Recursively collect Part objects from a list of items (Parts or VoltaGroups)."""
+            """Рекурсивно собрать Part из списка (Part или VoltaGroup)."""
             parts = []
             for item in items:
                 if hasattr(item, "is_volta_group") and item.is_volta_group:
@@ -295,15 +254,15 @@ class Song:
                     parts.append(item)
             return parts
 
-        # Iterate through all sections and lines
+        # Перебор всех секций и строк
         for section in self.sections:
             for line in section.lines:
-                # 1. Handle standard parts (flatten structure for traversal)
+                # 1. Обычные Part (развернуть структуру для обхода)
                 all_parts = collect_parts(line.parts)
 
                 for part in all_parts:
                     if part.chord:
-                        # Skip if not transposable
+                        # Пропуск нетранспонируемых
                         if not part.is_transposable:
                             continue
 
@@ -315,10 +274,10 @@ class Song:
                             original_chord_str, semitones, new_key, rbc_mode
                         )
 
-                        # Update the part
+                        # Обновить Part
                         part.chord = final_chord_str
 
-                # 2. Handle grid cells
+                # 2. Ячейки сетки
                 if hasattr(line, "grid_cells") and line.grid_cells:
                     for cell in line.grid_cells:
                         for part in cell.parts:

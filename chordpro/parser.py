@@ -9,32 +9,23 @@ class ChordProParser:
         song = Song()
         lines = content.splitlines()
 
-        # Start with an implied verse if lyrics appear before any directive,
-        # but usually we wait for the first section or just append to a 'generic' section.
-        # Let's start with None and create on demand.
+        # Начинаем без явной секции; если текст до первой директивы — создаём секцию по требованию.
         current_section = None
 
-        # Helper function to ensure a section exists (not used)
-        def ensure_section(type="verse", label="Verse"):
-            nonlocal current_section
-            if current_section is None:
-                current_section = Section(type=type, label=label)
-                song.sections.append(current_section)
-            return current_section
 
         for line in lines:
             line = line.strip()
             if not line:
                 continue
 
-            # Directives
+            # Директивы
             if line.startswith("{") and line.endswith("}"):
                 inner = line[1:-1]
                 parts = inner.split(":", 1)
                 key = parts[0].strip().lower()
                 value = parts[1].strip() if len(parts) > 1 else ""
 
-                # Metadata
+                # Метаданные
                 if key in ["title", "t"]:
                     song.title = value
                 elif key in ["artist", "a"]:
@@ -47,11 +38,11 @@ class ChordProParser:
                     song.tempo = value
                 elif key in ["time"]:
                     song.time = value
-                # Section Start
+                # Начало секции
                 elif key in ["soc", "start_of_chorus"]:
                     label = value.strip()
-                    # Check for Pre-chorus
-                    if label.lower().startswith("пре-пр"):
+                    # Проверка на пре-припев
+                    if label.lower().startswith("пре-пр") or label.lower().startswith("пред-пр") or label.lower().startswith("препр") or label.lower().startswith("предпр"):
                         current_section = Section(type="pre_chorus", label=label)
                     else:
                         current_section = Section(
@@ -60,7 +51,7 @@ class ChordProParser:
 
                     song.sections.append(current_section)
                 elif key == "chorus":
-                    label = value if value else "Пр."  # Item 2: Handle bare {chorus}
+                    label = value if value else "Пр."  # Обработка голого {chorus}
                     current_section = Section(type="chorus", label=label)
                     song.sections.append(current_section)
                     current_section = None
@@ -78,7 +69,7 @@ class ChordProParser:
                     song.sections.append(current_section)
 
                 elif key in ["c", "comment"]:
-                    # Parse the comment content for chords
+                    # Разбор текста комментария на аккорды
                     parsed_line = self._parse_line(value)
                     parsed_line.is_comment = True
 
@@ -88,12 +79,10 @@ class ChordProParser:
                     comment_section.lines.append(parsed_line)
                     song.sections.append(comment_section)
 
-                    # Reset current_section to ensure next comment creates a new section
+                    # Сбрасываем current_section, чтобы следующий комментарий создал новую секцию
                     current_section = None
 
-                # Section End (we mainly just finish the current section,
-                # effectively doing nothing as the next section start will handle creation,
-                # but we can reset current_section to None to catch "orphan" lines if we wanted)
+                # Конец секции: по сути сбрасываем current_section; следующее {start_of_*} создаст новую
                 elif key in [
                     "eoc",
                     "end_of_chorus",
@@ -105,8 +94,7 @@ class ChordProParser:
                     "end_of_grid",
                 ]:
                     current_section = None
-                    # Keeping current_section active allows trailing lines to attach to it,
-                    # but typically ChordPro structure is strict.
+                    # Оставить current_section активным — хвост строк попадёт в секцию; в ChordPro чаще жёсткая структура
                     pass
 
                 else:
@@ -114,21 +102,15 @@ class ChordProParser:
 
                 continue
 
-            # Comments
+            # Комментарии (строки, начинающиеся с #)
             if line.startswith("#"):
                 continue
 
-            # Inline Comment Directive (e.g. {comment: Intro...})
-            # Handled in directives loop if it was {comment:...},
-            # BUT the directives loop above handles keys. We need to add 'comment' there.
-
-            # Let's move comment handling into the directives block
-            # Re-reading the code: I am outside the directives block here.
-            # I need to modify the directives block to include 'comment' / 'c'
+            # Директива {comment: ...} обрабатывается в цикле директив выше (ключи 'comment' / 'c').
             pass
 
-            # Parse content
-            # If no section exists, create a default Verse
+            # Разбор содержимого
+            # Если секции нет — создать куплет по умолчанию
             if current_section is None:
                 current_section = Section(type="verse", label="")
                 song.sections.append(current_section)
@@ -140,7 +122,7 @@ class ChordProParser:
 
             current_section.lines.append(parsed_line)
 
-        # Post-process: Expand chorus references (Moved to caller control)
+        # Пост-обработка: раскрытие ссылок на припев (вынесено на уровень вызывающего кода)
         # song.expand_chorus_references()
 
         return song
@@ -148,30 +130,28 @@ class ChordProParser:
     def _parse_grid_line(self, line_text):
         line_obj = Line()
 
-        # Regex to split by bars, preserving delimiters
-        # Even indices (0, 2, 4...) are content (measures)
-        # Odd indices (1, 3, 5...) are separators (bars)
-        # Supported bars: ||:, :||, |:, :|, ||, |, //:, ://
+        # Регулярка: разбиение по тактовым чертам с сохранением разделителей
+        # Чётные индексы (0, 2, 4...) — такты; нечётные (1, 3, 5...) — разделители (черты)
+        # Поддерживаемые черты: ||:, :||, |:, :|, ||, |, //:, ://
         tokens = re.split(r"(\|\|:|:\|\||\|:|:\||\|\||\||//:|://)", line_text)
 
         for i, token in enumerate(tokens):
-            # token can be None if split at the very end with certain regex,
-            # but re.split with capturing group usually returns empty strings.
+            # token может быть пустой строкой при разбиении; re.split с группой сохраняет разделители
             if token is None:
                 continue
 
             if i % 2 == 1:
-                # ODD index -> it's a BAR
+                # Нечётный индекс — черта (BAR)
                 stripped = token.strip()
                 cell = GridCell(is_bar=True, text=stripped)
                 line_obj.grid_cells.append(cell)
             else:
-                # EVEN index -> it's a MEASURE (content)
-                # Even if it's empty, we add a cell to maintain column indexing
+                # Чётный индекс — такт (содержимое)
+                # Пустой такт тоже добавляем для сохранения индексации
                 content_text = token.strip()
 
                 volta = None
-                # Check for volta (starts with number) or is just a number
+                # Проверка volta: число в начале или только число
                 volta_match = re.match(r"^(\d[\d,\.]*)\s+(.*)", content_text)
                 if volta_match:
                     volta = volta_match.group(1)
@@ -188,7 +168,7 @@ class ChordProParser:
 
                 cell = GridCell(is_bar=False, volta=volta)
 
-                # Parse content parts (chords/text/symbols)
+                # Разбор частей такта: аккорды, текст, символы
                 sub_tokens = content_text.split()
                 for sub in sub_tokens:
                     if sub == ".":
@@ -198,7 +178,7 @@ class ChordProParser:
                     elif sub == "%":
                         cell.parts.append(Part(text="%"))
                     else:
-                        # Chord detection (starts with A-G, H)
+                        # Определение аккорда: начало на A–G, H
                         note_match = re.match(r"^([A-GH])([#b]?)", sub)
                         if note_match:
                             cell.parts.append(Part(chord=sub, text=""))
@@ -212,21 +192,13 @@ class ChordProParser:
     def _parse_line(self, line_text):
         line_obj = Line()
 
-        # Check for grid lines which might not have standard brackets if it's just | G | C |
-        # But standard chordpro usually still brackets chords like [G] even in grids,
-        # OR it uses the |...| syntax.
-        # The example `| G/B | C2 | D | G | - 2x` suggests raw text with bars.
-        # Since our parser looks for `[`, lines without brackets are treated as pure text.
-        # To support chords without brackets in specific contexts requires a more complex parser (detecting chord names).
-        # HOWEVER, in the user's example: `[G/B]` IS used in verses.
-        # In the `{sog}` block: `| G/B | C2 | D | G | - 2x`. No brackets.
-        # If we just treat this as text, it won't be highlighted as chords.
-        # Strategy: regex for likely chords? Or just leave as text but style the "grid" section in monospace.
-        # Monospace is the safest bet for grid sections without brackets.
+        # В сетках без скобок (напр. | G | C |) парсер ищет `[`; строки без скобок — чистый текст.
+        # В куплетах используется [G/B]; в {sog}: | G/B | C2 | D | G | без скобок — без подсветки аккордов.
+        # Стратегия: regex на вероятные аккорды или моноширинный вывод секции grid; моноширина надёжнее.
 
         parts = line_text.split("[")
 
-        # First part is text before any chord
+        # Первый фрагмент — текст до первого аккорда
         if parts[0]:
             line_obj.parts.append(Part(chord=None, text=parts[0]))
 
@@ -234,7 +206,7 @@ class ChordProParser:
             if "]" in chunk:
                 chord_part, text_part = chunk.split("]", 1)
 
-                # Handle non-transposable chords (starting with *)
+                # Обработка нетранспонируемых аккордов (начинаются с *)
                 is_transposable = True
                 if chord_part.startswith("*"):
                     chord_part = chord_part[1:]
@@ -244,7 +216,7 @@ class ChordProParser:
                     Part(chord=chord_part, text=text_part, is_transposable=is_transposable)
                 )
             else:
-                # Malformed
+                # Некорректная скобка
                 line_obj.parts.append(Part(chord=None, text="[" + chunk))
 
         line_obj.parts = self._group_voltas(line_obj.parts)
@@ -253,9 +225,8 @@ class ChordProParser:
 
     def _group_voltas(self, parts):
         """
-        Groups parts into VoltaGroup objects based on start/end markers.
-        Start marker: Chord starts with '(', e.g., '(1.' or '(1.G'
-        End marker: Chord ends with ')', e.g., 'E)' or ')'
+        Группирует Part в VoltaGroup по маркерам начала/конца.
+        Начало: аккорд с '(', напр. '(1.' или '(1.G'. Конец: аккорд с ')' в конце, напр. 'E)' или ')'.
         """
         new_items = []
         current_volta = None
@@ -270,28 +241,26 @@ class ChordProParser:
 
             chord_str = part.chord.strip()
 
-            # Check for Start Marker: (1. or (1.2.
-            # Regex: Starts with '(', digit, optional lines/dots, MUST end with dot.
-            # We want to capture the number '1.' or '1.2.'
+            # Маркер начала: (1. или (1.2.
+            # Regex: '(', цифра, опционально цифры/точки, обязательно точка в конце. Нужно захватить '1.' или '1.2.'
             start_match = re.match(r"^\((\d+[\d\.]*\.)", chord_str)
-            # Check for End Marker: Ends with ')'
+            # Маркер конца: заканчивается на ')'
             end_match = chord_str.endswith(")")
 
             if start_match:
-                # If we were already in a volta, close it (fallback behavior for missing end)
+                # Если уже внутри volta — закрываем её (на случай пропущенного маркера конца)
                 if current_volta:
                     new_items.append(current_volta)
                     current_volta = None
 
                 volta_num = start_match.group(1).rstrip(".")
 
-                # Clean the chord string for display
-                # Remove the leading '(1.' prefix
+                # Очистка аккорда для вывода: убрать префикс '(1.'
                 clean_chord = chord_str[len(start_match.group(0)) :]
 
-                # If end marker is ALSO here (e.g. `[(1.G)]`)
+                # Если маркер конца здесь же, напр. [(1.G)]
                 if end_match:
-                    clean_chord = clean_chord[:-1]  # Remove trailing ')'
+                    clean_chord = clean_chord[:-1]  # Удалить завершающую ')'
 
                 part.chord = clean_chord if clean_chord else None
 
@@ -299,12 +268,12 @@ class ChordProParser:
                 current_volta.parts.append(part)
 
                 if end_match:
-                    # Opens and closes in same part
+                    # Начало и конец в одном Part
                     self._optimize_and_append_volta(new_items, current_volta)
                     current_volta = None
 
             elif end_match and current_volta:
-                # End of active volta: Remove trailing ')' and close group
+                # Конец активной volta: убрать ')' в конце и закрыть группу
                 clean_chord = chord_str[:-1]
                 part.chord = clean_chord if clean_chord else None
 
@@ -313,13 +282,13 @@ class ChordProParser:
                 current_volta = None
 
             else:
-                # Normal part or closing bracket WITHOUT an active volta
+                # Обычный Part или закрывающая скобка при отсутствии активной volta
                 if current_volta:
                     current_volta.parts.append(part)
                 else:
                     new_items.append(part)
 
-        # Flush open volta
+        # Закрыть оставшуюся открытой volta
         if current_volta:
             self._optimize_and_append_volta(new_items, current_volta)
 
@@ -327,29 +296,27 @@ class ChordProParser:
 
     def _optimize_and_append_volta(self, target_list, volta_group):
         """
-        Optimizes the volta group by moving leading text-only parts OUT of the group.
-        This ensures formatting (brackets, numbers) starts at the first actual chord,
-        preventing lyrics breaks if the marker was placed before a syllable without a chord.
+        Оптимизирует VoltaGroup: выносит ведущие Part без аккорда из группы, чтобы скобки
+        и номера начинались с первого реального аккорда и не ломали слоги.
         """
-        # If group is empty, just distinct
+        # Если группа пуста — просто добавляем
         if not volta_group.parts:
             target_list.append(volta_group)
             return
 
-        # Check if there is AT LEAST ONE part with a chord in the group
+        # Проверка: есть ли в группе хотя бы один Part с аккордом
         has_chords = any(p.chord for p in volta_group.parts)
 
         if not has_chords:
-            # If no chords at all, we keep it as is (bracket over text)
+            # Если аккордов нет — оставляем группу как есть (скобка над текстом)
             target_list.append(volta_group)
             return
 
-        # Eject leading parts that have NO chord
-        # We stop as soon as we hit a part with a chord
+        # Вынести начальные Part без аккорда; остановка при первом Part с аккордом
         while volta_group.parts and not volta_group.parts[0].chord:
             p = volta_group.parts.pop(0)
             target_list.append(p)
 
-        # Determine if we still have parts (should allow yes if has_chords was true)
+        # Проверить, остались ли Part в группе (должно быть да, если has_chords)
         if volta_group.parts:
             target_list.append(volta_group)

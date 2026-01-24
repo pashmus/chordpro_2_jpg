@@ -17,7 +17,7 @@ class GridCell:
         self.is_bar = is_bar
         self.text = text
         self.volta = volta
-        self.parts = []  # List of Part objects
+        self.parts = []  # Список объектов Part
 
 
 class Part:
