@@ -2,8 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@500;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Poppins:wght@400;700&family=Roboto:wght@400;700&display=swap');
 
 :root{
-    --indent-text: 0px;
-    --indent-chord: calc(var(--indent-text) + 16px);
+    --indent-text: -2px;
+    --indent-chord: calc(var(--indent-text) + 18px);
     --chord-color: #e74c3c;
     --chorus-bg-color: #e1edfc;  /* Привязано к .layout-sidebar .section.chorus .section-content */
     --pre-chorus-bg-color: #f5f9ff;  /* Привязано к .layout-sidebar .section.pre_chorus .section-content */
@@ -247,7 +247,7 @@ body {
 .grid-text {
     font-family: 'Courier New', monospace;
     color: #555;
-    font-size: 14px;
+    font-size: 17px;
 }
 
 .section.grid .line {
@@ -262,7 +262,7 @@ body {
 
 .section-label {
     font-weight: bold;
-    font-size: 14px;
+    font-size: 14.5px;
     text-transform: uppercase;
     color: #606b6c;
     margin-bottom: 8px;
@@ -374,7 +374,7 @@ body {
 .section-reference .lyrics {
     display: inline;
     font-family: 'Courier New', monospace;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: bold;
     color: #606b6c;
     white-space: normal;
@@ -411,19 +411,26 @@ body {
 }
 
 .layout-sidebar .section-label {
-    width: 82px;
-    padding-right: 5px;
+    width: 85px;
+    padding-right: 4px;
     box-sizing: border-box;
     margin-bottom: 0;
     text-align: right;
     flex-shrink: 0;
 }
 
+/* Общий стиль для всех секций */
 .layout-sidebar .section-content {
-    padding-top: 0px;
-    padding-bottom: 0px;
+    padding-top: 2px;
+    padding-bottom: 8px;
     flex-grow: 1;
     width: auto;
+}
+
+/* Специальное правило только для комментариев */
+.layout-sidebar .section.comment .section-content {
+    padding-top: 1px;
+    padding-bottom: 2px;
 }
 
 /* Сброс стилей блоков для сайдбара (перенос в контент) */
@@ -500,7 +507,7 @@ body {
 /* Случай 1: куплет (без padding) */
 /* При offset-label (аккорды + текст) сдвигать метку вниз на высоту аккорда (21px) */
 .layout-sidebar .section.verse.offset-label .section-label {
-    margin-top: 7px;
+    margin-top: 9px;
 }
 
 /* Случай 2: припев/бридж (padding 15px) */
@@ -516,7 +523,7 @@ body {
 .layout-sidebar .section.pre_chorus.offset-label .section-label,
 .layout-sidebar .section.bridge.offset-label .section-label,
 .layout-sidebar .section.section-tag.offset-label .section-label {
-    margin-top: 7px;
+    margin-top: 6px;
 }
 
 /* Сброс смещения для пустого припева в сайдбаре */
