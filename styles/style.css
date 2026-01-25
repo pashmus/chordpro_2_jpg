@@ -1,3 +1,6 @@
+/* Подключение всех выбранных шрифтов сразу */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@500;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Poppins:wght@400;700&family=Roboto:wght@400;700&display=swap');
+
 :root{
     --indent-text: 0px;
     --indent-chord: calc(var(--indent-text) + 16px);
@@ -6,8 +9,9 @@
     --pre-chorus-bg-color: #f5f9ff;  /* Привязано к .layout-sidebar .section.pre_chorus .section-content */
     --bridge-bg-color: #fff3e1;  /* Привязано к .layout-sidebar .section.bridge .section-content */
 }
+
 body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Montserrat', sans-serif;
     background-color: #ffffff;
     color: #333;
     margin: 0;
@@ -237,7 +241,7 @@ body {
     font-family: 'Courier New', monospace;
     font-weight: bold;
     color: var(--chord-color);
-    font-size: 16px;
+    font-size: 17px;
 }
 
 .grid-text {
@@ -284,7 +288,7 @@ body {
     font-weight: bold;
     color: var(--chord-color);
     font-size: 17px;
-    font-family: 'Arial', sans-serif;
+    font-family: 'Lato', sans-serif;
     white-space: nowrap;
     height: var(--indent-chord);
     /* Отступ только у аккорда: при chord+padding > lyric обёртка расширяется — появляется место;
