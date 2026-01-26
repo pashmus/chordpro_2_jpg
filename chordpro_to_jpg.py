@@ -19,13 +19,13 @@ def get_special_style(text):
         return None
     t = text.strip()
     # Проверка на "Пр.", "Припев"
-    if t.lower().startswith('пр.') or t.lower().startswith('припев'):
+    if t.lower().startswith('пр.') or t.lower().startswith('припев') or t.lower().startswith('chorus'):
         return 'chorus'
     # Check for "Пре-пр"
     if t.lower().startswith("пре-пр") or t.lower().startswith("пред-пр") or t.lower().startswith("препр") or t.lower().startswith("предпр"):
         return 'pre_chorus'
     # Проверка на "Bridge" или "Бридж"
-    if t.lower().startswith('bridge') or t.lower().startswith('бридж'):
+    if t.lower().startswith('bridge') or t.lower().startswith('бридж') or t.lower().startswith('мост'):
         return 'bridge'
     return None
 
