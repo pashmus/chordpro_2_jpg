@@ -28,70 +28,197 @@ class Song:
         self.metadata = {}
         self.sections = []
 
+    def _get_section_type(self, text):
+        """
+        Determines section type based on text prefix.
+        Patterns match chordpro_to_jpg.py logic.
+        """
+        if not text:
+            return None
+        t = text.strip().lower()
+        # Chorus
+        if t.startswith('пр.') or t.startswith('припев') or t.startswith('chorus'):
+            return 'chorus'
+        # Pre-chorus
+        if t.startswith("пре-пр") or t.startswith("пред-пр") or t.startswith("препр") or t.startswith("предпр"):
+            return 'pre_chorus'
+        # Bridge
+        if t.startswith('bridge') or t.startswith('бридж') or t.startswith('мост'):
+            return 'bridge'
+        return None
+
+    def _get_section_id(self, text):
+        """
+        Extracts the first number found in text as the section ID.
+        Returns int or None.
+        """
+        if not text:
+            return None
+        match = re.search(r"\d+", text)
+        return int(match.group(0)) if match else None
+
     def expand_section_references(self):
         """
         Ищет комментарии-ссылки на секцию (напр. {comment: Припев}) и подставляет содержимое.
         Поддержка: припев, пре-припев, бридж.
         """
-        # 1. Сопоставить метки и секции
-        section_map = {}
+        # 1. Catalog all definitions (registry)
+        # definitions[type][id] = section
+        # definitions[type][None] = section (for unnumbered sections)
+        definitions = {"chorus": {}, "pre_chorus": {}, "bridge": {}}
+
         for section in self.sections:
-            if section.type in ["chorus", "pre_chorus", "bridge"] and section.label:
-                # Нормализация метки: обрезка пробелов и завершающего двоеточия
-                norm_label = section.label.strip().rstrip(":")
+            if section.lines and section.type in ["chorus", "pre_chorus", "bridge"]:
+                # Use parser's type, but we can also extract ID from label
+                s_type = section.type
+                s_id = self._get_section_id(section.label)
 
-                # Приоритет у секций с содержимым
-                if section.lines:
-                    section_map[norm_label] = section
-                elif norm_label not in section_map:
-                    section_map[norm_label] = section
+                # Store in registry
+                definitions[s_type][s_id] = section
+                # If ID is not None, also store as None if None not set?
+                # No, strict mapping is better for validation.
+                # But if we have "Chorus 1" and we ask for "Chorus", we might not find it if we look for None.
+                # However, logic says: if ID not found/valid, use last_seen.
 
-        if not section_map:
-            return
-
+        # 2. Build new sections list with expansions
         new_sections = []
 
+        # Last seen "full" section of each type
+        last_seen = {"chorus": None, "pre_chorus": None, "bridge": None}
+
         for section in self.sections:
-            if not section.lines:
+            # Update last_seen if this is a full section
+            if section.lines and section.type in ["chorus", "pre_chorus", "bridge"]:
+                last_seen[section.type] = section
                 new_sections.append(section)
                 continue
 
-            # Буфер строк текущего фрагмента секции
-            current_lines = []
+            # Check if this is an empty reference section (like {chorus})
+            # Parser creates empty section with type='chorus'
+            is_empty_ref = (
+                not section.lines
+                and section.type in ["chorus", "pre_chorus", "bridge"]
+            )
 
-            for line in section.lines:
-                # Проверка: строка — ссылка на секцию (комментарий)
-                match_found = False
-                if line.is_comment:
-                    # Собрать текст из Part
-                    comment_text = "".join(p.text for p in line.parts if p.text).strip()
-                    norm_comment = comment_text.rstrip(":")
+            if is_empty_ref:
+                # 1. Determine Type
+                # Check label first (e.g. {chorus: Bridge})
+                detected_type = self._get_section_type(section.label)
+                ref_type = detected_type if detected_type else section.type
 
-                    if norm_comment in section_map:
-                        match_found = True
-                        referenced_section = section_map[norm_comment]
+                # 2. Determine ID
+                # Try to extract ID from label (e.g. {chorus: Chorus 2})
+                ref_id = self._get_section_id(section.label)
 
-                        # 1. Сбросить накопленные строки в секцию (если есть)
-                        if current_lines:
-                            sub_section = Section(type=section.type, label=section.label)
-                            sub_section.lines = current_lines
-                            new_sections.append(sub_section)
-                            current_lines = []
+                target = None
 
-                        # 2. Добавить секцию-ссылку (глубокая копия)
-                        section_copy = copy.deepcopy(referenced_section)
-                        new_sections.append(section_copy)
+                # 3. Resolve Target
+                # Validation: Check if this ID exists in definitions
+                if ref_id is not None and ref_id in definitions[ref_type]:
+                     target = definitions[ref_type][ref_id]
+                else:
+                    # If ID not valid or not present, use last_seen
+                    target = last_seen[ref_type]
 
-                        # Строку-комментарий не добавляем — она заменяется.
+                if target:
+                    # Create copy
+                    new_sec = copy.deepcopy(target)
 
-                if not match_found:
-                    current_lines.append(line)
+                    # 4. Determine Label
+                    # If label is "generic" (just type name), use target label
+                    # "Generic" means it consists ONLY of the type alias (and maybe whitespace/punctuation).
+                    # If it has extra text (like "with fade"), it is NOT generic.
 
-            # Сбросить оставшиеся строки
-            if current_lines:
-                sub_section = Section(type=section.type, label=section.label)
-                sub_section.lines = current_lines
-                new_sections.append(sub_section)
+                    is_generic = False
+                    lbl = section.label.strip() if section.label else ""
+
+                    # Check for digits first (if digits exist, it's specific, e.g. "Chorus 2")
+                    has_digits = any(c.isdigit() for c in lbl)
+
+                    if not has_digits:
+                        # Normalize for comparison: lowercase, remove trailing punctuation (colon, dot)
+                        # We want to check if the WHOLE string is just a type alias.
+
+                        # Known aliases (should match _get_section_type logic but strict)
+                        # Chorus aliases
+                        chorus_aliases = ["пр", "пр.", "припев", "chorus"]
+                        # Pre-chorus aliases
+                        pre_aliases = ["пре-пр", "пред-пр", "препр", "предпр", "pre-chorus", "prechorus"]
+                        # Bridge aliases
+                        bridge_aliases = ["bridge", "бридж"]
+
+                        all_aliases = chorus_aliases + pre_aliases + bridge_aliases
+
+                        # Clean label: remove trailing punctuation for comparison
+                        clean_lbl = lbl.lower().rstrip(".: ")
+
+                        if clean_lbl in all_aliases:
+                            is_generic = True
+
+                    if is_generic:
+                        new_sec.label = target.label
+                    else:
+                         new_sec.label = section.label
+
+                    new_sections.append(new_sec)
+                else:
+                    # Unresolved, keep as is
+                    new_sections.append(section)
+
+                continue
+
+            # Check for comments inside section lines (e.g. Verse with {comment: Chorus})
+            # Only relevant for non-empty sections that are NOT the ones we already handled above
+            if section.lines:
+                current_lines = []
+                modified = False
+
+                for line in section.lines:
+                    match_found = False
+                    if line.is_comment:
+                        comment_text = "".join(p.text for p in line.parts if p.text).strip()
+
+                        # Identify type
+                        ref_type = self._get_section_type(comment_text)
+
+                        if ref_type:
+                            ref_id = self._get_section_id(comment_text)
+
+                            # Resolve
+                            target = None
+                            if ref_id is not None and ref_id in definitions[ref_type]:
+                                target = definitions[ref_type][ref_id]
+                            else:
+                                target = last_seen[ref_type]
+
+                            if target:
+                                match_found = True
+                                modified = True
+
+                                # Flush current lines
+                                if current_lines:
+                                    sub_section = Section(type=section.type, label=section.label)
+                                    sub_section.lines = current_lines
+                                    new_sections.append(sub_section)
+                                    current_lines = []
+
+                                # Insert expanded section
+                                new_sec = copy.deepcopy(target)
+                                new_sec.label = comment_text # Use comment text (e.g. "Chorus 2x")
+                                new_sections.append(new_sec)
+
+                    if not match_found:
+                        current_lines.append(line)
+
+                if current_lines:
+                    if modified:
+                        sub_section = Section(type=section.type, label=section.label)
+                        sub_section.lines = current_lines
+                        new_sections.append(sub_section)
+                    else:
+                        new_sections.append(section)
+            else:
+                new_sections.append(section)
 
         self.sections = new_sections
 
