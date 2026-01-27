@@ -145,7 +145,7 @@ class Song:
                         # Pre-chorus aliases
                         pre_aliases = ["пре-пр", "пред-пр", "препр", "предпр", "pre-chorus", "prechorus"]
                         # Bridge aliases
-                        bridge_aliases = ["bridge", "бридж"]
+                        bridge_aliases = ["bridge", "бридж", "мост"]
 
                         all_aliases = chorus_aliases + pre_aliases + bridge_aliases
 
