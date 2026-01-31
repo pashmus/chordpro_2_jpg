@@ -3,6 +3,7 @@ import argparse
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from chordpro import ChordProParser
+from pychord.utils import transpose_note
 
 # Конфигурация
 INPUT_DIR = 'input_cho'
@@ -266,10 +267,23 @@ def build_sections_data(song):
 
 
 def build_context(song, layout):
+    display_key = song.key
+    if song.key and song.capo:
+        try:
+            capo_val = int(song.capo)
+            if capo_val != 0:
+                # Вычисляем звучащую тональность
+                # transpose_note возвращает ноту в английской нотации (B, Bb)
+                sounding_key = transpose_note(song.key, capo_val, "C")
+                display_key = f"{sounding_key}({song.key})"
+        except Exception:
+            # Игнорируем ошибки (некорректный capo, сложная тональность и т.д.)
+            pass
+
     return {
         "title": song.title,
         "artist": song.artist,
-        "key": song.key,
+        "key": display_key,
         "capo": song.capo,
         "time": song.time,
         "tempo": song.tempo,
