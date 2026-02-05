@@ -14,13 +14,15 @@ class ChordProParser:
 
 
         for line in lines:
-            line = line.strip()
-            if not line:
+            line = line.rstrip()
+            clean_line = line.strip()
+
+            if not clean_line:
                 continue
 
             # Директивы
-            if line.startswith("{") and line.endswith("}"):
-                inner = line[1:-1]
+            if clean_line.startswith("{") and clean_line.endswith("}"):
+                inner = clean_line[1:-1]
                 parts = inner.split(":", 1)
                 key = parts[0].strip().lower()
                 value = parts[1].strip() if len(parts) > 1 else ""
@@ -103,7 +105,7 @@ class ChordProParser:
                 continue
 
             # Комментарии (строки, начинающиеся с #)
-            if line.startswith("#"):
+            if clean_line.startswith("#"):
                 continue
 
             # Директива {comment: ...} обрабатывается в цикле директив выше (ключи 'comment' / 'c').
@@ -116,7 +118,7 @@ class ChordProParser:
                 song.sections.append(current_section)
 
             if current_section.type == "grid":
-                parsed_line = self._parse_grid_line(line)
+                parsed_line = self._parse_grid_line(clean_line)
             else:
                 parsed_line = self._parse_line(line)
 
