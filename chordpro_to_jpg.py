@@ -39,12 +39,21 @@ def parse_args():
         "--transpose", "-t", type=int, default=0, help="Transpose chords by N semitones"
     )
     cli_parser.add_argument(
-        "--rbc",
-        "-r",
+        "--ger",
+        "-g",
         action="store_true",
         help=(
-            "Real B Chord: Input 'B' is B natural, 'Bb' is B flat. "
-            "Default (without this flag) is German input: 'B' is B flat, 'H' is B natural."
+            "German notation on input: 'H' is B natural, 'B' is B flat. "
+            "Default (without this flag) is standard input: 'B' is B natural, 'Bb' is B flat."
+        ),
+    )
+    cli_parser.add_argument(
+        "--std",
+        "-s",
+        action="store_true",
+        help=(
+            "Standard notation on output: 'B' is B natural, 'Bb' is B flat. "
+            "Default (without this flag) is German output: 'H' is B natural, 'B' is B flat."
         ),
     )
     cli_parser.add_argument(
@@ -298,11 +307,11 @@ def render_song_to_html(song, template, layout):
 
 
 def apply_transforms(song, args):
-    # Всегда обрабатываем для корректной немецкой нотации (H=Си, B=Си бемоль). rbc_mode задаёт интерпретацию входа.
+    # Обрабатываем аккорды с учетом входной и выходной нотации
     if args.transpose != 0:
         print(f"Transposing by {args.transpose} semitones...")
 
-    song.transpose(args.transpose, rbc_mode=args.rbc)
+    song.transpose(args.transpose, input_ger=args.ger, output_std=args.std)
 
     # Опция: раскрыть ссылки на секции
     if args.expand_chorus:

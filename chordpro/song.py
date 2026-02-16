@@ -264,7 +264,7 @@ class Song:
 
         return None, before_slash, after_slash
 
-    def transpose_chord_parts(self, chord_str, semitones, new_key, rbc_mode):
+    def transpose_chord_parts(self, chord_str, semitones, new_key, input_ger, output_std):
         """
         Транспонирует root и басовую ноты в аккорде, сохраняя остальные символы.
 
@@ -272,7 +272,8 @@ class Song:
             chord_str: строка аккорда (без квадратных скобок)
             semitones: количество полутонов для транспонирования
             new_key: новая тональность
-            rbc_mode: режим интерпретации входа (True = English B, False = German B)
+            input_ger: режим интерпретации входа (True = German H/B, False = Standard B/Bb)
+            output_std: режим выходной нотации (True = Standard B/Bb, False = German H/B)
 
         Returns:
             транспонированная строка аккорда
@@ -296,24 +297,24 @@ class Song:
             root_rest = before_slash
 
         # Нормализуем ноты для pychord (конвертация H/B)
-        def normalize_note(note, is_rbc):
+        def normalize_note(note, is_german_input):
             """Конвертирует ноту в формат pychord (English notation)."""
             if not note:
                 return note
             s = note
-            if not is_rbc:
+            if is_german_input:
                 # German Input: H -> B, B -> Bb
                 temp = "###TEMP###"
                 s = s.replace("H", temp)
                 s = s.replace("B", "Bb")
                 s = s.replace(temp, "B")
             else:
-                # RBC Mode: H -> B (на всякий случай)
+                # Standard Input: H -> B (на всякий случай, если встретится H)
                 s = s.replace("H", "B")
             return s
 
         # Транспонируем root ноту
-        normalized_root = normalize_note(root_note, rbc_mode)
+        normalized_root = normalize_note(root_note, input_ger)
         try:
             transposed_root = transpose_note(normalized_root, semitones, new_key)
         except Exception:
@@ -323,13 +324,13 @@ class Song:
         # Транспонируем басовую ноту (если есть)
         transposed_bass = None
         if bass_note is not None:
-            normalized_bass = normalize_note(bass_note, rbc_mode)
+            normalized_bass = normalize_note(bass_note, input_ger)
             try:
                 transposed_bass = transpose_note(normalized_bass, semitones, new_key)
             except Exception:
                 transposed_bass = normalized_bass
 
-        # Форматируем обратно в немецкую нотацию
+        # Форматируем обратно в нужную нотацию
         def format_note_to_german(note):
             """Конвертирует ноту из English в German notation."""
             if not note:
@@ -341,9 +342,15 @@ class Song:
             s = s.replace(temp, "B")
             return s
 
-        # Форматируем транспонированные ноты
-        final_root = format_note_to_german(transposed_root)
-        final_bass = format_note_to_german(transposed_bass) if transposed_bass else None
+        # Форматируем транспонированные ноты в зависимости от режима выхода
+        if output_std:
+            # Стандартная нотация на выходе: оставляем как есть (B, Bb)
+            final_root = transposed_root
+            final_bass = transposed_bass if transposed_bass else None
+        else:
+            # Германская нотация на выходе: конвертируем (H, B)
+            final_root = format_note_to_german(transposed_root)
+            final_bass = format_note_to_german(transposed_bass) if transposed_bass else None
 
         # Собираем результат
         result = final_root + root_rest
@@ -352,13 +359,21 @@ class Song:
 
         return result
 
-    def transpose(self, semitones, rbc_mode=False):
+    def transpose(self, semitones, input_ger=False, output_std=False):
         """
         Транспонировать все аккорды на заданное число полутонов.
-        Интерпретация входа: по умолчанию (rbc_mode=False) — немецкий ввод (B=Bb, H=B);
-        rbc_mode=True — английский (B=B, Bb=Bb). Выход всегда в немецкой нотации: B->H, Bb->B.
+        
+        Args:
+            semitones: количество полутонов для транспонирования
+            input_ger: режим входной нотации (True = German H/B, False = Standard B/Bb)
+            output_std: режим выходной нотации (True = Standard B/Bb, False = German H/B)
+        
+        Интерпретация входа: по умолчанию (input_ger=False) — стандартный ввод (B=B, Bb=Bb);
+        input_ger=True — немецкий ввод (B=Bb, H=B).
+        Выход: по умолчанию (output_std=False) — немецкая нотация (B->H, Bb->B);
+        output_std=True — стандартная нотация (B, Bb остаются как есть).
         """
-        # Выполняем и при semitones == 0 для нормализации в немецкую нотацию.
+        # Выполняем и при semitones == 0 для нормализации нотации.
 
         # Определить текущую тональность
         # Если тональность не указана — по умолчанию C
@@ -398,7 +413,7 @@ class Song:
                         # Используем новую функцию для транспонирования root и басовых нот
                         # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
                         final_chord_str = self.transpose_chord_parts(
-                            original_chord_str, semitones, new_key, rbc_mode
+                            original_chord_str, semitones, new_key, input_ger, output_std
                         )
 
                         # Обновить Part
@@ -414,7 +429,7 @@ class Song:
                                 # Используем новую функцию для транспонирования root и басовых нот
                                 # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
                                 final_chord_str = self.transpose_chord_parts(
-                                    original_chord_str, semitones, new_key, rbc_mode
+                                    original_chord_str, semitones, new_key, input_ger, output_std
                                 )
 
                                 part.chord = final_chord_str
