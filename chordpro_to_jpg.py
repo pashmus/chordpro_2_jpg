@@ -3,7 +3,7 @@ import argparse
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from chordpro import ChordProParser
-from pychord.utils import transpose_note
+from pychord.utils import transpose_note, note_to_val, val_to_note
 
 # Конфигурация
 INPUT_DIR = 'input_cho'
@@ -275,16 +275,65 @@ def build_sections_data(song):
     return sections_data
 
 
-def build_context(song, layout):
+def build_context(song, layout, input_ger=False):
     display_key = song.key
     if song.key and song.capo:
         try:
             capo_val = int(song.capo)
             if capo_val != 0:
-                # Вычисляем звучащую тональность
-                # transpose_note возвращает ноту в английской нотации (B, Bb)
-                sounding_key = transpose_note(song.key, capo_val, "C")
-                display_key = f"{sounding_key}({song.key})"
+                # Извлекаем корень и качество ключа (Dm -> ("D", "m"))
+                key_root_raw, key_quality_raw = song.extract_root_note(song.key)
+                if key_root_raw:
+                    key_quality_raw = (key_quality_raw or "").strip()
+
+                    # Минорный ли это ключ
+                    is_minor = (
+                        key_quality_raw
+                        and key_quality_raw.lower().startswith("m")
+                        and not key_quality_raw.lower().startswith("maj")
+                    )
+
+                    # Полная нормализация H/B (как в song.py)
+                    def normalize_key_root_for_pychord(note, is_german_input):
+                        if not note:
+                            return note
+                        s = note
+                        if is_german_input:
+                            # German Input: H -> B, B -> Bb
+                            temp = "###TEMP###"
+                            s = s.replace("H", temp)
+                            s = s.replace("B", "Bb")
+                            s = s.replace(temp, "B")
+                        else:
+                            # Standard Input: H -> B
+                            s = s.replace("H", "B")
+                        return s
+
+                    # Используем переданный input_ger для нормализации
+                    key_root_eng = normalize_key_root_for_pychord(key_root_raw, input_ger)
+
+                    try:
+                        # 1. Старый scale (relative major для минора, root для мажора)
+                        if is_minor:
+                            old_scale_root_eng = song._get_relative_major_root(key_root_eng)
+                        else:
+                            old_scale_root_eng = key_root_eng
+
+                        # 2. Транспонируем scale численно и нормализуем
+                        old_scale_val = note_to_val(old_scale_root_eng)
+                        new_scale_val = (old_scale_val + capo_val) % 12
+                        new_scale_root_eng = song._normalize_key_root_from_val(new_scale_val)
+
+                        # 3. Транспонируем корень ключа в системе нового scale
+                        key_root_val = note_to_val(key_root_eng)
+                        new_key_root_val = (key_root_val + capo_val) % 12
+                        sounding_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
+
+                        # 4. Формируем отображаемый ключ
+                        sounding_key = sounding_root_eng + ("m" if is_minor else "")
+                        display_key = f"{sounding_key}({song.key})"
+                    except Exception:
+                        pass
         except Exception:
             # Игнорируем ошибки (некорректный capo, сложная тональность и т.д.)
             pass
@@ -301,8 +350,8 @@ def build_context(song, layout):
     }
 
 
-def render_song_to_html(song, template, layout):
-    context = build_context(song, layout)
+def render_song_to_html(song, template, layout, input_ger=False):
+    context = build_context(song, layout, input_ger=input_ger)
     return template.render(context)
 
 
@@ -319,8 +368,8 @@ def apply_transforms(song, args):
         song.expand_section_references()
 
 
-def render_song_to_files(filename, song, template, browser, layout):
-    html_content = render_song_to_html(song, template, layout)
+def render_song_to_files(filename, song, template, browser, layout, input_ger=False):
+    html_content = render_song_to_html(song, template, layout, input_ger=input_ger)
 
     # Сохранить временный HTML
     temp_html_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"{filename}.html"))
@@ -380,7 +429,7 @@ def main():
 
             song = parser.parse(content)
             apply_transforms(song, args)
-            render_song_to_files(filename, song, template, browser, args.layout)
+            render_song_to_files(filename, song, template, browser, args.layout, input_ger=args.ger)
 
         browser.close()
         print("Done!")

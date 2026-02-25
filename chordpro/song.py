@@ -1,6 +1,6 @@
 import copy
 import re
-from pychord.utils import transpose_note
+from pychord.utils import transpose_note, note_to_val, val_to_note
 from pychord.constants import qualities
 
 from .models import Section
@@ -239,6 +239,7 @@ class Song:
             return note, rest
         return None, chord_str
 
+
     def extract_bass_note(self, chord_str):
         """
         Извлекает басовую ноту после слэша.
@@ -359,15 +360,54 @@ class Song:
 
         return result
 
+    def _normalize_key_root_from_val(self, val: int) -> str:
+        """
+        Приводит числовое значение (0–11) к каноническому имени корня тональности.
+        Всегда 12 фиксированных имён:
+        """
+        mapping = {
+            0: "C",
+            1: "Db",
+            2: "D",
+            3: "Eb",
+            4: "E",
+            5: "F",
+            6: "F#",  # тут наш спец‑кейс F#/Gb
+            7: "G",
+            8: "Ab",
+            9: "A",
+            10: "Bb",
+            11: "B",
+        }
+        return mapping.get(val % 12, "C")
+
+
+    def _get_relative_major_root(self, root_note_eng):
+        """
+        Корень относительного мажора для минорной тоники в английской нотации.
+        Dm -> F, Bm -> D, F#m -> A и т.д.
+        """
+        if not root_note_eng:
+            return root_note_eng
+
+        try:
+            val = note_to_val(root_note_eng)
+        except Exception:
+            return root_note_eng
+
+        rel_val = (val + 3) % 12
+        return self._normalize_key_root_from_val(rel_val)
+
+
     def transpose(self, semitones, input_ger=False, output_std=False):
         """
         Транспонировать все аккорды на заданное число полутонов.
-        
+
         Args:
             semitones: количество полутонов для транспонирования
             input_ger: режим входной нотации (True = German H/B, False = Standard B/Bb)
             output_std: режим выходной нотации (True = Standard B/Bb, False = German H/B)
-        
+
         Интерпретация входа: по умолчанию (input_ger=False) — стандартный ввод (B=B, Bb=Bb);
         input_ger=True — немецкий ввод (B=Bb, H=B).
         Выход: по умолчанию (output_std=False) — немецкая нотация (B->H, Bb->B);
@@ -375,16 +415,82 @@ class Song:
         """
         # Выполняем и при semitones == 0 для нормализации нотации.
 
-        # Определить текущую тональность
-        # Если тональность не указана — по умолчанию C
+        # Исходная тональность: извлечь корень и «хвост» (качество), напр. "Dm" -> ("D", "m")
         current_key = self.key if self.key else "C"
+        key_root_raw, key_quality_raw = self.extract_root_note(current_key)
+        if not key_root_raw:
+            key_root_raw = "C"
+            key_quality_raw = ""
 
-        # Вычислить новую тональность
-        # transpose_note(нота, полутоны, строй); тональность обычно транспонируем от C для нового тонического звука
-        new_key = transpose_note(current_key, semitones, "C")
+        key_quality_raw = (key_quality_raw or "").strip()
 
-        # Обновить тональность в песне
-        self.key = new_key
+        # Минорный ли это ключ (Dm, Dmin и т.п.)
+        is_minor = (
+            key_quality_raw
+            and key_quality_raw.lower().startswith("m")
+            and not key_quality_raw.lower().startswith("maj")
+        )
+
+        # Нормализуем корень тональности для pychord (H/B -> английская нотация)
+        def normalize_key_root_for_pychord(note, is_german_input):
+            if not note:
+                return note
+            s = note
+            if is_german_input:
+                # German Input: H -> B, B -> Bb
+                temp = "###TEMP###"
+                s = s.replace("H", temp)
+                s = s.replace("B", "Bb")
+                s = s.replace(temp, "B")
+            else:
+                # Standard Input: H -> B (на всякий случай, если встретится H)
+                s = s.replace("H", "B")
+            return s
+
+        key_root_eng = normalize_key_root_for_pychord(key_root_raw, input_ger)
+
+        # 1. Выбираем старый scale для транспонирования ключа
+        try:
+            if is_minor:
+                old_scale_root_eng = self._get_relative_major_root(key_root_eng)
+            else:
+                old_scale_root_eng = key_root_eng
+        except Exception:
+            old_scale_root_eng = key_root_eng
+
+        # 2. Транспонируем scale (relative major / root) численно и нормализуем имя
+        try:
+            old_scale_val = note_to_val(old_scale_root_eng)
+            new_scale_val = (old_scale_val + semitones) % 12
+            new_scale_root_eng = self._normalize_key_root_from_val(new_scale_val)
+        except Exception:
+            new_scale_root_eng = old_scale_root_eng
+
+        # 3. Транспонируем сам корень ключа в системе НОВОГО scale
+        try:
+            key_root_val = note_to_val(key_root_eng)
+            new_key_root_val = (key_root_val + semitones) % 12
+            new_key_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
+        except Exception:
+            new_key_root_eng = key_root_eng
+
+        # 4. Этот же new_scale_root_eng используем как scale для аккордов
+        chord_scale_root = new_scale_root_eng
+
+        # Отображаемый корень тональности в нужной нотации (германской или стандартной)
+        if output_std:
+            new_key_root_display = new_key_root_eng
+        else:
+            temp = "###TEMP###"
+            s = new_key_root_eng.replace("Bb", temp)
+            s = s.replace("B", "H")
+            s = s.replace(temp, "B")
+            new_key_root_display = s
+
+        # Ключ всегда в нормализованном виде:
+        # - минор: "Dm"
+        # - мажор: "D"
+        self.key = new_key_root_display + ("m" if is_minor else "")
 
         def collect_parts(items):
             """Рекурсивно собрать Part из списка (Part или VoltaGroup)."""
@@ -413,7 +519,11 @@ class Song:
                         # Используем новую функцию для транспонирования root и басовых нот
                         # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
                         final_chord_str = self.transpose_chord_parts(
-                            original_chord_str, semitones, new_key, input_ger, output_std
+                            original_chord_str,
+                            semitones,
+                            chord_scale_root,
+                            input_ger,
+                            output_std,
                         )
 
                         # Обновить Part
@@ -429,7 +539,11 @@ class Song:
                                 # Используем новую функцию для транспонирования root и басовых нот
                                 # Работает даже при semitones == 0 для нормализации нотации (H/B конвертация)
                                 final_chord_str = self.transpose_chord_parts(
-                                    original_chord_str, semitones, new_key, input_ger, output_std
+                                    original_chord_str,
+                                    semitones,
+                                    chord_scale_root,
+                                    input_ger,
+                                    output_std,
                                 )
 
                                 part.chord = final_chord_str
