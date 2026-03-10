@@ -1,14 +1,80 @@
 import os
+import sys
 import argparse
+from pathlib import Path
+
+import psycopg2
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from chordpro import ChordProParser
 from pychord.utils import transpose_note, note_to_val, val_to_note
 
 # Конфигурация
-INPUT_DIR = 'input_cho'
-OUTPUT_DIR = 'output_jpg'
-TEMPLATE_DIR = 'templates'
+INPUT_DIR = "input_cho_test"
+OUTPUT_DIR = "output_jpg_test"
+TEMPLATE_DIR = "templates"
+
+
+# Настройка доступа к конфигу и БД
+_CURRENT_DIR = Path(__file__).resolve().parent
+# .../chordpro_2_jpg -> .../CHORD_PRO_PROJECT -> .../Sbornik_samara_bot
+_PROJECT_ROOT = _CURRENT_DIR.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+try:
+    from config_data.config import load_config
+except ImportError:
+    load_config = None
+
+
+class DatabaseManager:
+    """
+    Простой менеджер подключения к Postgres на основе config_data.config.load_config.
+    """
+
+    def __init__(self):
+        self.db_config = {}
+        if load_config is not None:
+            try:
+                config = load_config()
+                self.db_config = {
+                    "host": config.db.db_host,
+                    "database": config.db.db_name,
+                    "user": config.db.db_user,
+                    "password": config.db.db_password,
+                }
+            except Exception as e:
+                print(f"Ошибка загрузки конфигурации БД: {e}")
+                self.db_config = {}
+        else:
+            print("Предупреждение: не удалось импортировать load_config из config_data.config.")
+            self.db_config = {}
+
+        self.conn = None
+
+    def connect(self):
+        """
+        Устанавливает соединение с БД. Возвращает True при успехе, иначе False.
+        """
+        if not self.db_config:
+            print("DB config пустой, подключение невозможно.")
+            return False
+
+        try:
+            self.conn = psycopg2.connect(**self.db_config)
+            return True
+        except Exception as e:
+            print(f"Ошибка подключения к базе данных: {e}")
+            return False
+
+    def close(self):
+        """
+        Закрывает соединение с БД при наличии.
+        """
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
 
 def get_special_style(text):
@@ -71,6 +137,17 @@ def parse_args():
         help=(
             "Expand section references: replace comments that match section labels "
             "(chorus, pre-chorus, bridge) with the actual content."
+        ),
+    )
+    cli_parser.add_argument(
+        "-db",
+        "--from-db",
+        nargs="+",
+        metavar="SONG_NUM_OR_RANGE",
+        help=(
+            "Брать песни из БД по указанным номерам или диапазонам "
+            "(формат N или N-M) вместо чтения файлов из папки. "
+            "Примеры: -db 321 322 323  или  -db 300-350 400"
         ),
     )
     return cli_parser.parse_args()
@@ -397,9 +474,122 @@ def render_song_to_files(filename, song, template, browser, layout, input_ger=Fa
     page.close()
 
 
-def main():
-    args = parse_args()
+def _get_db_manager():
+    """
+    Возвращает экземпляр DatabaseManager или None при ошибке.
+    """
+    try:
+        return DatabaseManager()
+    except Exception as e:
+        print(f"Ошибка создания DatabaseManager: {e}")
+        return None
 
+
+def _fetch_song_chordpro_and_title(db_manager, song_number):
+    """
+    Возвращает кортеж (chordpro_text, title) или (None, None), если данные недоступны.
+    """
+    if not db_manager.conn:
+        if not db_manager.connect():
+            print("Не удалось подключиться к базе данных.")
+            return None, None
+
+    try:
+        with db_manager.conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                    chordpro,
+                    CASE WHEN alt_name IS NULL THEN name ELSE alt_name END AS title
+                FROM songs
+                WHERE num = %s
+                """,
+                (song_number,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                print(f"Песня с номером {song_number} не найдена в БД.")
+                return None, None
+
+            chordpro_text, title = row[0], row[1]
+            if chordpro_text is None:
+                print(f"В БД для песни {song_number} поле chordpro пустое (NULL). Пропуск.")
+                return None, title
+
+            return chordpro_text, title
+    except Exception as e:
+        print(f"Ошибка при чтении chordpro для песни {song_number}: {e}")
+        return None, None
+
+
+def _make_filename_for_song(song_number, title):
+    """
+    Формирует безопасное имя файла для песни из БД.
+    """
+    base = str(song_number)
+    if title:
+        unsafe_chars = '<>:"/\\|?*'
+        safe_title = "".join("_" if c in unsafe_chars else c for c in str(title))
+        safe_title = safe_title.strip()
+        if safe_title:
+            base = f"{song_number} {safe_title}"
+    return f"{base}.cho"
+
+
+def _parse_song_numbers(tokens):
+    """
+    Разбирает список строк с номерами и диапазонами песен в отсортированный список int.
+
+    Поддерживаемые форматы:
+      - '321'        -> [321]
+      - '300-305'    -> [300, 301, 302, 303, 304, 305]
+      - '400-390'    -> [390..400] (границы будут автоматически упорядочены)
+    Некорректные токены пропускаются с сообщением.
+    """
+    if not tokens:
+        return []
+
+    result = set()
+    for raw in tokens:
+        token = str(raw).strip()
+        if not token:
+            continue
+
+        if "-" in token:
+            # Диапазон
+            left, right = token.split("-", 1)
+            left = left.strip()
+            right = right.strip()
+            if not left or not right:
+                print(f"Некорректный диапазон '{token}', пропуск.")
+                continue
+            try:
+                start = int(left)
+                end = int(right)
+            except ValueError:
+                print(f"Некорректный диапазон '{token}', пропуск.")
+                continue
+
+            if start > end:
+                start, end = end, start
+
+            for n in range(start, end + 1):
+                result.add(n)
+        else:
+            # Одиночный номер
+            try:
+                n = int(token)
+                result.add(n)
+            except ValueError:
+                print(f"Некорректный номер песни '{token}', пропуск.")
+
+    return sorted(result)
+
+
+def render_songs_from_folder(args):
+    """
+    Рендерит песни из файлов в папке INPUT_DIR (текущий стандартный режим).
+    """
     # Создать выходную директорию при отсутствии
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -418,21 +608,91 @@ def main():
     with sync_playwright() as p:
         # Запуск браузера
         browser = p.chromium.launch()
+        try:
+            for filename in files:
+                print(f"Processing {filename}...")
+                filepath = os.path.join(INPUT_DIR, filename)
 
-        for filename in files:
-            print(f"Processing {filename}...")
-            filepath = os.path.join(INPUT_DIR, filename)
+                # Чтение и разбор
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
 
-            # Чтение и разбор
-            with open(filepath, "r", encoding="utf-8") as f:
-                content = f.read()
+                song = parser.parse(content)
+                apply_transforms(song, args)
+                render_song_to_files(
+                    filename,
+                    song,
+                    template,
+                    browser,
+                    args.layout,
+                    input_ger=args.ger,
+                )
+        finally:
+            browser.close()
+            print("Done!")
 
-            song = parser.parse(content)
-            apply_transforms(song, args)
-            render_song_to_files(filename, song, template, browser, args.layout, input_ger=args.ger)
 
-        browser.close()
-        print("Done!")
+def render_songs_from_db(args):
+    """
+    Рендерит песни, взятые из поля songs.chordpro по номерам/диапазонам,
+    указанным во флаге -db/--from-db.
+    """
+    raw_tokens = args.from_db or []
+    song_numbers = _parse_song_numbers(raw_tokens)
+    if not song_numbers:
+        print("Не удалось разобрать номера песен для режима -db/--from-db.")
+        return
+
+    db_manager = _get_db_manager()
+    if db_manager is None:
+        return
+
+    # Создать выходную директорию при отсутствии
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Инициализация парсера и шаблона
+    parser = ChordProParser()
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    template = env.get_template("song.html")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            for song_number in song_numbers:
+                print(f"Processing song #{song_number} from database...")
+                chordpro_text, title = _fetch_song_chordpro_and_title(
+                    db_manager, song_number
+                )
+                if not chordpro_text:
+                    # Уже выведено предупреждение, просто пропускаем
+                    continue
+
+                song = parser.parse(chordpro_text)
+                apply_transforms(song, args)
+                filename = _make_filename_for_song(song_number, title)
+                render_song_to_files(
+                    filename,
+                    song,
+                    template,
+                    browser,
+                    args.layout,
+                    input_ger=args.ger,
+                )
+        finally:
+            browser.close()
+            db_manager.close()
+            print("Done!")
+
+
+def main():
+    args = parse_args()
+
+    # Если указан режим работы с БД, берём песни по номерам из songs.chordpro
+    if getattr(args, "from_db", None):
+        render_songs_from_db(args)
+    else:
+        # Стандартный режим: брать .cho/.pro/.chordpro файлы из папки INPUT_DIR
+        render_songs_from_folder(args)
 
 
 if __name__ == "__main__":
