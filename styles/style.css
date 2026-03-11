@@ -575,6 +575,32 @@ body {
     pointer-events: none;
     z-index: 0;
 }
+/* Для самостоятельной volta:
+   скобка должна ограничиваться шириной аккорда, а не всего слова. */
+.volta-span.standalone::before {
+    display: none;
+}
+.volta-span.standalone .chord-wrapper {
+    align-items: flex-start;
+}
+.volta-span.standalone .standalone-head-chord {
+    position: relative;
+    z-index: 1;
+}
+.volta-span.standalone .standalone-head-chord::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -13px;
+    right: 0;
+    height: 12px;
+    border: 2px solid;
+    border-color: var(--volta-color, #7f8c8d);
+    border-bottom: 0;
+    border-width: 2px 2px 0 2px;
+    pointer-events: none;
+    z-index: 0;
+}
 .volta-number {
     position: absolute;
     width: 0;

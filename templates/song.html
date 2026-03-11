@@ -148,11 +148,19 @@
                                                         </span>
                                                     {% endif %}
                                                 </span>
-                                            {% else %}
+                                            {% elif item.is_floating %}
                                                 {# Плавающая volta на исходной позиции — только текст #}
                                                 {% for part in item.parts %}
                                                     <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
                                                 {% endfor %}
+                                            {% else %}
+                                                {# Самостоятельная volta на своей позиции #}
+                                                <span class="volta-span volta-{{ item.number | replace('.', '-') }} standalone">
+                                                    <span class="volta-number">{{ item.number }}.</span>
+                                                    {% for part in item.parts %}
+                                                        <span class="chord-wrapper">{% if part.chord %}<span class="chord{% if loop.first %} standalone-head-chord{% endif %}">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                                    {% endfor %}
+                                                </span>
                                             {% endif %}
                                         {% else %}
                                             <span class="chord-wrapper">{% if item.chord %}<span class="chord">{% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}{{ item.chord }}</span>{% endif %}<span class="lyrics">{{ item.text }}</span></span>
@@ -186,11 +194,19 @@
                                                 </span>
                                             {% endif %}
                                         </span>
-                                    {% else %}
+                                    {% elif item.is_floating %}
                                         {# Плавающая volta на исходной позиции — только текст #}
                                         {% for part in item.parts %}
                                             <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
                                         {% endfor %}
+                                    {% else %}
+                                        {# Самостоятельная volta на своей позиции #}
+                                        <span class="volta-span volta-{{ item.number | replace('.', '-') }} standalone">
+                                            <span class="volta-number">{{ item.number }}.</span>
+                                            {% for part in item.parts %}
+                                                <span class="chord-wrapper">{% if part.chord %}<span class="chord{% if loop.first %} standalone-head-chord{% endif %}">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                            {% endfor %}
+                                        </span>
                                     {% endif %}
                                 {% else %}
                                     <span class="chord-wrapper">{% if item.chord %}<span class="chord">{% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}{{ item.chord }}</span>{% endif %}<span class="lyrics">{{ item.text }}</span></span>

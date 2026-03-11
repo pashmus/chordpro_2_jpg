@@ -298,29 +298,84 @@ def build_sections_data(song):
 
                 lines_data.append({"grid_cells": cells_data, "is_comment": False})
             else:
-                # Найти voltas в строке для логики стека
-                line_voltas = [
-                    p
-                    for p in line.parts
+                # Классификация voltas в строке:
+                # - anchor только для локальной пары 1. -> 2.
+                # - остальные volta-группы рендерятся самостоятельно на своей позиции
+                volta_entries = [
+                    (idx, p)
+                    for idx, p in enumerate(line.parts)
                     if hasattr(p, "is_volta_group") and p.is_volta_group
                 ]
+                volta_roles = {}
+
+                def _normalize_volta_number(num):
+                    return str(num).strip().rstrip(".")
+
+                i = 0
+                while i < len(volta_entries):
+                    curr_idx, curr_part = volta_entries[i]
+                    curr_num = _normalize_volta_number(curr_part.number)
+
+                    if i + 1 < len(volta_entries):
+                        next_idx, next_part = volta_entries[i + 1]
+                        next_num = _normalize_volta_number(next_part.number)
+                        if curr_num == "1" and next_num == "2":
+                            trailing_siblings = [next_part]
+                            volta_roles[curr_idx] = {
+                                "is_anchor": True,
+                                "is_floating": False,
+                                "floating_siblings": trailing_siblings,
+                            }
+                            volta_roles[next_idx] = {
+                                "is_anchor": False,
+                                "is_floating": True,
+                                "floating_siblings": [],
+                            }
+
+                            # 3-я и все последующие (до следующей 1-й) идут тем же "паровозиком"
+                            j = i + 2
+                            while j < len(volta_entries):
+                                sib_idx, sib_part = volta_entries[j]
+                                sib_num = _normalize_volta_number(sib_part.number)
+                                if sib_num == "1":
+                                    break
+                                trailing_siblings.append(sib_part)
+                                volta_roles[sib_idx] = {
+                                    "is_anchor": False,
+                                    "is_floating": True,
+                                    "floating_siblings": [],
+                                }
+                                j += 1
+
+                            i = j
+                            continue
+
+                    volta_roles[curr_idx] = {
+                        "is_anchor": False,
+                        "is_floating": False,
+                        "floating_siblings": [],
+                    }
+                    i += 1
 
                 parts_data = []
-                v_idx = 0
-                for part in line.parts:
+                for part_idx, part in enumerate(line.parts):
                     if hasattr(part, "is_volta_group") and part.is_volta_group:
-                        is_anchor = v_idx == 0
-                        is_floating = v_idx > 0
-                        siblings = line_voltas[1:] if is_anchor else []
+                        role = volta_roles.get(
+                            part_idx,
+                            {
+                                "is_anchor": False,
+                                "is_floating": False,
+                                "floating_siblings": [],
+                            },
+                        )
                         parts_data.append(
                             serialize_item(
                                 part,
-                                is_anchor=is_anchor,
-                                is_floating=is_floating,
-                                floating_siblings=siblings,
+                                is_anchor=role["is_anchor"],
+                                is_floating=role["is_floating"],
+                                floating_siblings=role["floating_siblings"],
                             )
                         )
-                        v_idx += 1
                     else:
                         parts_data.append(serialize_item(part))
 
