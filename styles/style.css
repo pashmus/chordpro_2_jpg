@@ -592,16 +592,22 @@ body {
 .volta-1 { --volta-color: #2980b9; }
 .volta-2 { --volta-color: #8e44ad; }
 .volta-3 { --volta-color: #27ae60; }
+.volta-flow {
+    display: inline-flex;
+    align-items: flex-start;
+    white-space: nowrap;
+}
 .volta-span .chord-wrapper {
     z-index: 1;
 }
 
 /* Стек voltas для каскада (2-я, 3-я volta) */
 .volta-stack {
-    position: absolute;
-    left: 100%;
-    top: 0;
-    display: flex;
+    /* Держим вторую/третью вольту в потоке строки,
+       чтобы ширина контейнера учитывала их содержимое. */
+    position: static;
+    display: inline-flex;
+    align-items: flex-start;
     white-space: nowrap;
     z-index: 10;
     /* margin-left для компенсации отрицательных смещений и зазора между соседями */
@@ -612,5 +618,9 @@ body {
 .volta-span.in-stack {
     display: inline-flex;
     margin-right: 15px; /* Зазор между voltas в стеке */
+}
+
+.volta-span.in-stack:last-child {
+    margin-right: 0;
 }
 

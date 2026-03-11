@@ -10,8 +10,8 @@ from chordpro import ChordProParser
 from pychord.utils import transpose_note, note_to_val, val_to_note
 
 # Конфигурация
-INPUT_DIR = "input_cho_test"
-OUTPUT_DIR = "output_jpg_test"
+INPUT_DIR = "input_cho"
+OUTPUT_DIR = "output_jpg"
 TEMPLATE_DIR = "templates"
 
 
@@ -466,7 +466,7 @@ def render_song_to_files(filename, song, template, browser, layout, input_ger=Fa
     output_filename = os.path.splitext(filename)[0] + ".jpg"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
 
-    # Скриншот контейнера песни, чтобы избежать бесконечной высоты и лишнего фона
+    # Скриншот контейнера песни, чтобы убрать лишнее поле справа/снизу.
     locator = page.locator(".song-container")
     locator.screenshot(path=output_path, type="jpeg", quality=90)
 
@@ -498,7 +498,7 @@ def _fetch_song_chordpro_and_title(db_manager, song_number):
         with db_manager.conn.cursor() as cursor:
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     chordpro,
                     CASE WHEN alt_name IS NULL THEN name ELSE alt_name END AS title
                 FROM songs

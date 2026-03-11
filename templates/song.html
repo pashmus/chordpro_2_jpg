@@ -127,11 +127,13 @@
                                     {% for item in line.parts %}
                                         {% if item.is_volta_group %}
                                             {% if item.is_anchor %}
-                                                <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
-                                                    <span class="volta-number">{{ item.number }}.</span>
-                                                    {% for part in item.parts %}
-                                                        <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
-                                                    {% endfor %}
+                                                <span class="volta-flow">
+                                                    <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                                        <span class="volta-number">{{ item.number }}.</span>
+                                                        {% for part in item.parts %}
+                                                            <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                                        {% endfor %}
+                                                    </span>
 
                                                     {% if item.floating_siblings %}
                                                         <span class="volta-stack">
@@ -163,11 +165,13 @@
                             {% for item in line.parts %}
                                 {% if item.is_volta_group %}
                                     {% if item.is_anchor %}
-                                        <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
-                                            <span class="volta-number">{{ item.number }}.</span>
-                                            {% for part in item.parts %}
-                                                <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
-                                            {% endfor %}
+                                        <span class="volta-flow">
+                                            <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                                <span class="volta-number">{{ item.number }}.</span>
+                                                {% for part in item.parts %}
+                                                    <span class="chord-wrapper">{% if part.chord %}<span class="chord">{{ part.chord }}</span>{% endif %}<span class="lyrics">{{ part.text }}</span></span>
+                                                {% endfor %}
+                                            </span>
 
                                             {% if item.floating_siblings %}
                                                 <span class="volta-stack">
