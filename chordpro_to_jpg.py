@@ -10,20 +10,20 @@ from chordpro import ChordProParser
 from pychord.utils import transpose_note, note_to_val, val_to_note
 
 # Конфигурация
-INPUT_DIR = "input_cho"
+INPUT_DIR = "input_cho_test"
 OUTPUT_DIR = "output_jpg"
 TEMPLATE_DIR = "templates"
 
 
 # Настройка доступа к конфигу и БД
 _CURRENT_DIR = Path(__file__).resolve().parent
-# .../chordpro_2_jpg -> .../CHORD_PRO_PROJECT -> .../Sbornik_samara_bot
-_PROJECT_ROOT = _CURRENT_DIR.parent.parent
+# .../chordpro_2_jpg -> .../Sbornik_samara_bot
+_PROJECT_ROOT = _CURRENT_DIR.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 try:
-    from config_data.config import load_config
+    from config_data.config import load_config # type: ignore
 except ImportError:
     load_config = None
 
@@ -103,6 +103,16 @@ def parse_args():
     )
     cli_parser.add_argument(
         "--transpose", "-t", type=int, default=0, help="Transpose chords by N semitones"
+    )
+    cli_parser.add_argument(
+        "--capo",
+        "-capo",
+        type=int,
+        default=None,
+        help=(
+            "Set capo position for output metadata and compensate chords/key by capo semitones. "
+            "Values 2, +2 and -2 are treated identically."
+        ),
     )
     cli_parser.add_argument(
         "--ger",
@@ -488,11 +498,51 @@ def render_song_to_html(song, template, layout, input_ger=False):
 
 
 def apply_transforms(song, args):
-    # Обрабатываем аккорды с учетом входной и выходной нотации
-    if args.transpose != 0:
-        print(f"Transposing by {args.transpose} semitones...")
+    def _parse_capo_steps(raw_capo):
+        """
+        Нормализует capo к неотрицательному числу полутонов.
+        Некорректное значение трактуется как 0.
+        """
+        if raw_capo is None:
+            return 0
+        try:
+            return abs(int(str(raw_capo).strip()))
+        except Exception:
+            return 0
 
-    song.transpose(args.transpose, input_ger=args.ger, output_std=args.std)
+    def _resolve_capo_and_transpose(cli_transpose, cli_capo, source_capo):
+        """
+        Возвращает:
+        - итоговый сдвиг для транспонирования аккордов/ключа
+        - финальное значение capo для метаданных (строка) или None
+        """
+        total_transpose = cli_transpose
+        capo_meta_value = None
+        source_capo_steps = _parse_capo_steps(source_capo)
+
+        if cli_capo is not None:
+            # Для capo всегда компенсируем вниз по полутонам: 2, +2 и -2 -> -2.
+            # Важно: сохраняем эталонное звучание, которое уже задано входными key+capo.
+            # Поэтому учитываем исходный capo как базу и смещаем к новому target capo.
+            capo_steps = _parse_capo_steps(cli_capo)
+            total_transpose += source_capo_steps - capo_steps
+            capo_meta_value = str(capo_steps)
+
+        return total_transpose, capo_meta_value
+
+    total_transpose, capo_meta_value = _resolve_capo_and_transpose(
+        args.transpose, args.capo, song.capo
+    )
+
+    # Обрабатываем аккорды с учетом входной и выходной нотации
+    if total_transpose != 0:
+        print(f"Transposing by {total_transpose} semitones...")
+
+    song.transpose(total_transpose, input_ger=args.ger, output_std=args.std)
+
+    # Если capo передан через CLI, он имеет приоритет над входным {capo: ...}.
+    if capo_meta_value is not None:
+        song.capo = capo_meta_value
 
     # Опция: раскрыть ссылки на секции
     if args.expand_chorus:
