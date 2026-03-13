@@ -144,7 +144,7 @@
                                                         {% for part in item.parts %}
                                                             <span class="chord-wrapper">
                                                                 {% if part.chord %}
-                                                                    <span class="chord">
+                                                                    <span class="chord{% if part.small_chord %} chord-small{% endif %}">
                                                                         {% if index_chords and part.chord_extra %}
                                                                             {% set parts = part.chord_base.split('/') %}
                                                                             {% if parts|length == 2 %}
@@ -170,7 +170,7 @@
                                                                     {% for sp in sib.parts %}
                                                                         {% if sp.chord %}
                                                                             <span class="chord-wrapper">
-                                                                                <span class="chord">
+                                                                                <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
                                                                                     {% if index_chords and sp.chord_extra %}
                                                                                         {% set parts = sp.chord_base.split('/') %}
                                                                                         {% if parts|length == 2 %}
@@ -202,7 +202,7 @@
                                                     {% for part in item.parts %}
                                                         <span class="chord-wrapper">
                                                             {% if part.chord %}
-                                                                <span class="chord{% if loop.first %} standalone-head-chord{% endif %}">
+                                                                <span class="chord{% if loop.first %} standalone-head-chord{% endif %}{% if part.small_chord %} chord-small{% endif %}">
                                                                     {% if index_chords and part.chord_extra %}
                                                                         {% set parts = part.chord_base.split('/') %}
                                                                         {% if parts|length == 2 %}
@@ -223,7 +223,7 @@
                                         {% else %}
                                             <span class="chord-wrapper">
                                                 {% if item.chord %}
-                                                    <span class="chord">
+                                                    <span class="chord{% if item.small_chord %} chord-small{% endif %}">
                                                         {% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}
                                                         {% if index_chords and item.chord_extra %}
                                                             {% set parts = item.chord_base.split('/') %}
@@ -254,7 +254,7 @@
                                                 {% for part in item.parts %}
                                                     <span class="chord-wrapper">
                                                         {% if part.chord %}
-                                                            <span class="chord">
+                                                            <span class="chord{% if part.small_chord %} chord-small{% endif %}">
                                                                 {% if index_chords and part.chord_extra %}
                                                                     {% set parts = part.chord_base.split('/') %}
                                                                     {% if parts|length == 2 %}
@@ -280,7 +280,7 @@
                                                             {% for sp in sib.parts %}
                                                                 {% if sp.chord %}
                                                                     <span class="chord-wrapper">
-                                                                        <span class="chord">
+                                                                        <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
                                                                             {% if index_chords and sp.chord_extra %}
                                                                                 {% set parts = sp.chord_base.split('/') %}
                                                                                 {% if parts|length == 2 %}
@@ -312,7 +312,7 @@
                                             {% for part in item.parts %}
                                                 <span class="chord-wrapper">
                                                     {% if part.chord %}
-                                                        <span class="chord{% if loop.first %} standalone-head-chord{% endif %}">
+                                                        <span class="chord{% if loop.first %} standalone-head-chord{% endif %}{% if part.small_chord %} chord-small{% endif %}">
                                                             {% if index_chords and part.chord_extra %}
                                                                 {% set parts = part.chord_base.split('/') %}
                                                                 {% if parts|length == 2 %}
@@ -333,7 +333,7 @@
                                 {% else %}
                                     <span class="chord-wrapper">
                                         {% if item.chord %}
-                                            <span class="chord">
+                                            <span class="chord{% if item.small_chord %} chord-small{% endif %}">
                                                 {% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}
                                                 {% if index_chords and item.chord_extra %}
                                                     {% set parts = item.chord_base.split('/') %}

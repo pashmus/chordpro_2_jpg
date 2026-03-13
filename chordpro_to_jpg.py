@@ -14,6 +14,10 @@ INPUT_DIR = "input_cho_test"
 OUTPUT_DIR = "output_jpg"
 TEMPLATE_DIR = "templates"
 
+# Порог суммарной длины «хвостовых» аккордов (после текста),
+# при превышении которого аккорды хвоста уменьшаются.
+TRAILING_CHORDS_CHAR_LIMIT = 20
+
 
 # Настройка доступа к конфигу и БД
 _CURRENT_DIR = Path(__file__).resolve().parent
@@ -192,22 +196,31 @@ def collect_parts(items):
 
 
 def serialize_item(item, is_anchor=False, is_floating=False, floating_siblings=None):
+    """
+    Преобразует объект строки/вольты в словарь для шаблона.
+    Переносит флаги вроде small_chord, is_anchor/is_floating и др.
+    """
+    small_chord = getattr(item, "small_chord", False)
+
     if hasattr(item, "is_volta_group") and item.is_volta_group:
         return {
             "is_volta_group": True,
             "number": item.number,
             "is_anchor": is_anchor,
             "is_floating": is_floating,
+            "small_chord": small_chord,
             "floating_siblings": [
                 serialize_item(s) for s in (floating_siblings or [])
             ],
             "parts": [serialize_item(p) for p in item.parts],
         }
+
     return {
         "chord": item.chord,
         "text": item.text,
-        "volta": item.volta,
+        "volta": getattr(item, "volta", None),
         "is_volta_group": False,
+        "small_chord": small_chord,
     }
 
 
@@ -286,6 +299,70 @@ def _apply_chord_split_to_part_dict(part_dict, enable_index=False):
     base, extra = _split_chord_for_index(chord, enable_index=enable_index)
     part_dict["chord_base"] = base
     part_dict["chord_extra"] = extra
+
+
+def _item_has_text(item):
+    """
+    Возвращает True, если в исходном объекте строки/вольты есть непустой текст.
+    Для вольты проверяет дочерние части.
+    """
+    text = getattr(item, "text", None)
+    if text and str(text).strip():
+        return True
+
+    if hasattr(item, "is_volta_group") and item.is_volta_group:
+        for child in getattr(item, "parts", []):
+            if _item_has_text(child):
+                return True
+
+    return False
+
+
+def _item_has_chords(item):
+    """
+    Возвращает True, если в исходном объекте есть аккорды.
+    Для вольты проверяет дочерние части.
+    """
+    chord = getattr(item, "chord", None)
+    if chord:
+        return True
+
+    if hasattr(item, "is_volta_group") and item.is_volta_group:
+        for child in getattr(item, "parts", []):
+            if _item_has_chords(child):
+                return True
+
+    return False
+
+
+def _item_chords_length(item):
+    """
+    Приблизительная суммарная длина строк аккордов в исходном объекте
+    (учитываются вложенные части volta-группы).
+    """
+    total = 0
+
+    chord = getattr(item, "chord", None)
+    if chord:
+        total += len(str(chord))
+
+    if hasattr(item, "is_volta_group") and item.is_volta_group:
+        for child in getattr(item, "parts", []):
+            total += _item_chords_length(child)
+
+    return total
+
+
+def _mark_small_chord_on_item(item):
+    """
+    Помечает исходный объект (и вложенные элементы вольты) как требующие
+    уменьшенного шрифта аккорда (small_chord = True).
+    """
+    setattr(item, "small_chord", True)
+
+    if hasattr(item, "is_volta_group") and item.is_volta_group:
+        for child in getattr(item, "parts", []):
+            _mark_small_chord_on_item(child)
 
 
 def build_sections_data(song, index_chords=False):
@@ -407,6 +484,37 @@ def build_sections_data(song, index_chords=False):
 
                 lines_data.append({"grid_cells": cells_data, "is_comment": False})
             else:
+                # Определение хвостовых аккордов в исходных объектах строки.
+                # Считаем, что хвост — это последовательность частей после
+                # последнего фрагмента с текстом, содержащих только аккорды.
+                if not getattr(line, "is_comment", False):
+                    last_text_idx = -1
+                    for idx, part in enumerate(line.parts):
+                        if _item_has_text(part):
+                            last_text_idx = idx
+
+                    if last_text_idx != -1:
+                        total_len = 0
+                        tail_indices = []
+                        for idx in range(len(line.parts) - 1, last_text_idx, -1):
+                            part = line.parts[idx]
+                            # Часть хвоста должна содержать аккорды
+                            if not _item_has_chords(part):
+                                break
+
+                            tail_indices.append(idx)
+                            chord_len = _item_chords_length(part)
+                            if total_len > 0:
+                                total_len += 1  # условный пробел между частями
+                            total_len += chord_len
+
+                        if (
+                            tail_indices
+                            and total_len > TRAILING_CHORDS_CHAR_LIMIT
+                        ):
+                            for idx in tail_indices:
+                                _mark_small_chord_on_item(line.parts[idx])
+
                 # Классификация voltas в строке:
                 # - anchor только для локальной пары 1. -> 2.
                 # - остальные volta-группы рендерятся самостоятельно на своей позиции
