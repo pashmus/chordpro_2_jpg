@@ -251,6 +251,8 @@ def _split_chord_for_index(chord, enable_index=False):
         if not head or not bass:
             return chord, ""
 
+        # Для головы применяем те же правила индекса и исключений,
+        # затем добавляем бас целиком к основе.
         base_head, extra_head = _split_chord_for_index(head, enable_index=True)
         base = f"{base_head}/{bass}"
         extra = extra_head
@@ -274,6 +276,15 @@ def _split_chord_for_index(chord, enable_index=False):
 
         base = s[:i]
         extra = s[i:]
+
+        # Исключаем служебные символы из дополнения индекса:
+        # вертикальная черта, слэш и обратный слэш (а также
+        # возможный пробел перед ними) должны оставаться
+        # обычным шрифтом, а не подстрочным индексом.
+        while extra and extra[0] in " |/\\":
+            base += extra[0]
+            extra = extra[1:]
+
         return base, extra
 
     # Не удалось распознать стандартную структуру аккорда — не делим
