@@ -165,11 +165,12 @@ def parse_args():
         ),
     )
     cli_parser.add_argument(
-        "--index",
-        "-index",
+        "-small-ext",
+        "--small-extensions",
+        dest="small_extensions",
         action="store_true",
         help=(
-            "Включить режим подстрочных индексов для дополнений аккордов "
+            "Включить режим уменьшенных дополнений аккордов "
             "(dim7, maj7, sus4 и т.п.), кроме знаков диез/бемоль и минорного m "
             "сразу после тоники."
         ),
@@ -962,7 +963,7 @@ def render_songs_from_folder(args):
                     browser,
                     args.layout,
                     input_ger=args.ger,
-                    index_chords=args.index,
+                    index_chords=args.small_extensions,
                 )
         finally:
             browser.close()
@@ -1014,7 +1015,7 @@ def render_songs_from_db(args):
                     browser,
                     args.layout,
                     input_ger=args.ger,
-                    index_chords=args.index,
+                    index_chords=args.small_extensions,
                 )
         finally:
             browser.close()
