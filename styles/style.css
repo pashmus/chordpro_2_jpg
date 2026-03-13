@@ -298,6 +298,12 @@ body {
     position: relative;
 }
 
+.chord-index {
+    font-size: 0.7em;
+    /*vertical-align: sub;
+    margin-left: -1px;*/
+}
+
 .lyrics {
     font-size: 18px;
     color: #2c3e50;

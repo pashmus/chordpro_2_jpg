@@ -160,6 +160,16 @@ def parse_args():
             "Примеры: -db 321 322 323  или  -db 300-350 400"
         ),
     )
+    cli_parser.add_argument(
+        "--index",
+        "-index",
+        action="store_true",
+        help=(
+            "Включить режим подстрочных индексов для дополнений аккордов "
+            "(dim7, maj7, sus4 и т.п.), кроме знаков диез/бемоль и минорного m "
+            "сразу после тоники."
+        ),
+    )
     return cli_parser.parse_args()
 
 
@@ -201,7 +211,84 @@ def serialize_item(item, is_anchor=False, is_floating=False, floating_siblings=N
     }
 
 
-def build_sections_data(song):
+def _split_chord_for_index(chord, enable_index=False):
+    """
+    Разбивает строку аккорда на основу и дополнение для режима подстрочных индексов.
+
+    Правила:
+    - Основа: буква тоники (A–G, H/B) + опциональный #/b.
+    - Минорное m считается частью основы только если
+      сразу после него идут цифры или ничего.
+    - Всё остальное относится к дополнению (extra).
+    """
+    if not enable_index or not chord:
+        return chord, ""
+
+    s = str(chord).strip()
+    if not s:
+        return chord, ""
+
+    # Аккорды с басом через слэш (E/G# и т.п.):
+    # индекс применяем только к «голове» (до '/'),
+    # бас целиком остаётся в основной части.
+    if "/" in s:
+        head, bass = s.split("/", 1)
+        head = head.strip()
+        bass = bass.strip()
+        if not head or not bass:
+            return chord, ""
+
+        base_head, extra_head = _split_chord_for_index(head, enable_index=True)
+        base = f"{base_head}/{bass}"
+        extra = extra_head
+        return base, extra
+
+    i = 0
+    n = len(s)
+
+    # Тоника
+    if i < n and s[i].upper() in "ABCDEFGH":
+        i += 1
+        # Диез/бемоль
+        if i < n and s[i] in "#b":
+            i += 1
+        # Минорное m
+        if i < n and s[i] == "m":
+            j = i + 1
+            # m относится к основе, только если далее цифры или конец строки
+            if j == n or (j < n and s[j].isdigit()):
+                i += 1
+
+        base = s[:i]
+        extra = s[i:]
+        return base, extra
+
+    # Не удалось распознать стандартную структуру аккорда — не делим
+    return chord, ""
+
+
+def _apply_chord_split_to_part_dict(part_dict, enable_index=False):
+    """
+    Добавляет к словарю части поля chord_base / chord_extra с учётом режима индекса.
+    Рекурсивно проходит по volta-группам.
+    """
+    if not isinstance(part_dict, dict):
+        return
+
+    if part_dict.get("is_volta_group"):
+        for child in part_dict.get("parts", []):
+            _apply_chord_split_to_part_dict(child, enable_index=enable_index)
+        for sib in part_dict.get("floating_siblings", []):
+            _apply_chord_split_to_part_dict(sib, enable_index=enable_index)
+        return
+
+    chord = part_dict.get("chord")
+    base, extra = _split_chord_for_index(chord, enable_index=enable_index)
+    part_dict["chord_base"] = base
+    part_dict["chord_extra"] = extra
+
+
+def build_sections_data(song, index_chords=False):
     sections_data = []
     for sec in song.sections:
         if not sec.lines and not sec.label:
@@ -240,7 +327,19 @@ def build_sections_data(song):
                 cells_data = []
                 for cell in line.grid_cells:
                     # Ячейки сетки — простые Part; при появлении VoltaGroup потребуется доработка
-                    cell_parts = [{"chord": p.chord, "text": p.text} for p in cell.parts]
+                    cell_parts = []
+                    for p in cell.parts:
+                        base, extra = _split_chord_for_index(
+                            p.chord, enable_index=index_chords
+                        )
+                        cell_parts.append(
+                            {
+                                "chord": p.chord,
+                                "text": p.text,
+                                "chord_base": base,
+                                "chord_extra": extra,
+                            }
+                        )
 
                     # Проверка: такт по сути пустой
                     is_empty = not cell.is_bar and not any(
@@ -378,16 +477,22 @@ def build_sections_data(song):
                                 "floating_siblings": [],
                             },
                         )
-                        parts_data.append(
-                            serialize_item(
-                                part,
-                                is_anchor=role["is_anchor"],
-                                is_floating=role["is_floating"],
-                                floating_siblings=role["floating_siblings"],
-                            )
+                        part_dict = serialize_item(
+                            part,
+                            is_anchor=role["is_anchor"],
+                            is_floating=role["is_floating"],
+                            floating_siblings=role["floating_siblings"],
                         )
+                        _apply_chord_split_to_part_dict(
+                            part_dict, enable_index=index_chords
+                        )
+                        parts_data.append(part_dict)
                     else:
-                        parts_data.append(serialize_item(part))
+                        part_dict = serialize_item(part)
+                        _apply_chord_split_to_part_dict(
+                            part_dict, enable_index=index_chords
+                        )
+                        parts_data.append(part_dict)
 
                 line_special_style = None
                 is_comment = getattr(line, "is_comment", False)
@@ -417,7 +522,7 @@ def build_sections_data(song):
     return sections_data
 
 
-def build_context(song, layout, input_ger=False):
+def build_context(song, layout, input_ger=False, index_chords=False):
     display_key = song.key
     if song.key and song.capo:
         try:
@@ -487,13 +592,16 @@ def build_context(song, layout, input_ger=False):
         "capo": song.capo,
         "time": song.time,
         "tempo": song.tempo,
-        "sections": build_sections_data(song),
+        "sections": build_sections_data(song, index_chords=index_chords),
         "layout": layout,
+        "index_chords": index_chords,
     }
 
 
-def render_song_to_html(song, template, layout, input_ger=False):
-    context = build_context(song, layout, input_ger=input_ger)
+def render_song_to_html(song, template, layout, input_ger=False, index_chords=False):
+    context = build_context(
+        song, layout, input_ger=input_ger, index_chords=index_chords
+    )
     return template.render(context)
 
 
@@ -550,8 +658,12 @@ def apply_transforms(song, args):
         song.expand_section_references()
 
 
-def render_song_to_files(filename, song, template, browser, layout, input_ger=False):
-    html_content = render_song_to_html(song, template, layout, input_ger=input_ger)
+def render_song_to_files(
+    filename, song, template, browser, layout, input_ger=False, index_chords=False
+):
+    html_content = render_song_to_html(
+        song, template, layout, input_ger=input_ger, index_chords=index_chords
+    )
 
     # Сохранить временный HTML
     temp_html_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"{filename}.html"))
@@ -731,6 +843,7 @@ def render_songs_from_folder(args):
                     browser,
                     args.layout,
                     input_ger=args.ger,
+                    index_chords=args.index,
                 )
         finally:
             browser.close()
@@ -782,6 +895,7 @@ def render_songs_from_db(args):
                     browser,
                     args.layout,
                     input_ger=args.ger,
+                    index_chords=args.index,
                 )
         finally:
             browser.close()
