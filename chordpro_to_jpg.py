@@ -151,8 +151,9 @@ def parse_args():
         ),
     )
     cli_parser.add_argument(
-        "--ger",
-        "-g",
+        "-in-ger",
+        "--in-ger",
+        dest="in_ger",
         action="store_true",
         help=(
             "German notation on input: 'H' is B natural, 'B' is B flat. "
@@ -160,12 +161,13 @@ def parse_args():
         ),
     )
     cli_parser.add_argument(
-        "--std",
-        "-s",
+        "-out-ger",
+        "--out-ger",
+        dest="out_ger",
         action="store_true",
         help=(
-            "Standard notation on output: 'B' is B natural, 'Bb' is B flat. "
-            "Default (without this flag) is German output: 'H' is B natural, 'B' is B flat."
+            "German notation on output: 'H' is B natural, 'B' is B flat. "
+            "Default (without this flag) is standard output: 'B' is B natural, 'Bb' is B flat."
         ),
     )
     cli_parser.add_argument(
@@ -897,7 +899,7 @@ def apply_transforms(song, args):
         args.transpose, args.capo, song.capo
     )
 
-    song.transpose(total_transpose, input_ger=args.ger, output_std=args.std)
+    song.transpose(total_transpose, input_ger=args.in_ger, output_std=not args.out_ger)
 
     # Если capo передан через CLI, он имеет приоритет над входным {capo: ...}.
     if capo_meta_value is not None:
@@ -1194,7 +1196,7 @@ def render_songs_from_folder(args):
                         template,
                         browser,
                         args.layout,
-                        input_ger=args.ger,
+                        input_ger=args.in_ger,
                         index_chords=args.small_extensions,
                     )
                 except Exception:
@@ -1261,7 +1263,7 @@ def render_songs_from_db(args):
                         template,
                         browser,
                         args.layout,
-                        input_ger=args.ger,
+                        input_ger=args.in_ger,
                         index_chords=args.small_extensions,
                     )
                 except Exception:
