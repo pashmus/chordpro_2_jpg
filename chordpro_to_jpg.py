@@ -16,7 +16,7 @@ TEMPLATE_DIR = "templates"
 
 # Порог суммарной длины «хвостовых» аккордов (после текста),
 # при превышении которого аккорды хвоста уменьшаются.
-TRAILING_CHORDS_CHAR_LIMIT = 20
+TRAILING_CHORDS_CHAR_LIMIT = 15
 
 
 # Настройка доступа к конфигу и БД
@@ -377,6 +377,47 @@ def _mark_small_chord_on_item(item):
             _mark_small_chord_on_item(child)
 
 
+def _mark_small_trailing_chords_in_parts(parts, char_limit):
+    """
+    Ищет хвостовые аккорды в списке частей и уменьшает их, если суммарная длина
+    превышает порог. Работает рекурсивно, включая хвосты внутри VoltaGroup.
+    """
+    if not parts:
+        return
+
+    # 1) Хвост на текущем уровне списка parts:
+    # после последнего фрагмента с текстом идут только аккордовые части.
+    last_text_idx = -1
+    for idx, part in enumerate(parts):
+        if _item_has_text(part):
+            last_text_idx = idx
+
+    if last_text_idx != -1:
+        total_len = 0
+        tail_indices = []
+        for idx in range(len(parts) - 1, last_text_idx, -1):
+            part = parts[idx]
+            if not _item_has_chords(part):
+                break
+
+            tail_indices.append(idx)
+            chord_len = _item_chords_length(part)
+            if total_len > 0:
+                total_len += 1  # условный пробел между частями
+            total_len += chord_len
+
+        if tail_indices and total_len > char_limit:
+            for idx in tail_indices:
+                _mark_small_chord_on_item(parts[idx])
+
+    # 2) Хвосты внутри вольт на дочернем уровне
+    for part in parts:
+        if hasattr(part, "is_volta_group") and part.is_volta_group:
+            _mark_small_trailing_chords_in_parts(
+                getattr(part, "parts", []), char_limit
+            )
+
+
 def build_sections_data(song, index_chords=False):
     sections_data = []
     for sec in song.sections:
@@ -496,36 +537,13 @@ def build_sections_data(song, index_chords=False):
 
                 lines_data.append({"grid_cells": cells_data, "is_comment": False})
             else:
-                # Определение хвостовых аккордов в исходных объектах строки.
-                # Считаем, что хвост — это последовательность частей после
-                # последнего фрагмента с текстом, содержащих только аккорды.
+                # Определение хвостовых аккордов:
+                # - на верхнем уровне строки
+                # - внутри VoltaGroup (когда вольта начинается в тексте)
                 if not getattr(line, "is_comment", False):
-                    last_text_idx = -1
-                    for idx, part in enumerate(line.parts):
-                        if _item_has_text(part):
-                            last_text_idx = idx
-
-                    if last_text_idx != -1:
-                        total_len = 0
-                        tail_indices = []
-                        for idx in range(len(line.parts) - 1, last_text_idx, -1):
-                            part = line.parts[idx]
-                            # Часть хвоста должна содержать аккорды
-                            if not _item_has_chords(part):
-                                break
-
-                            tail_indices.append(idx)
-                            chord_len = _item_chords_length(part)
-                            if total_len > 0:
-                                total_len += 1  # условный пробел между частями
-                            total_len += chord_len
-
-                        if (
-                            tail_indices
-                            and total_len > TRAILING_CHORDS_CHAR_LIMIT
-                        ):
-                            for idx in tail_indices:
-                                _mark_small_chord_on_item(line.parts[idx])
+                    _mark_small_trailing_chords_in_parts(
+                        line.parts, TRAILING_CHORDS_CHAR_LIMIT
+                    )
 
                 # Классификация voltas в строке:
                 # - anchor только для локальной пары 1. -> 2.

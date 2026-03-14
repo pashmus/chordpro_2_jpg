@@ -305,8 +305,9 @@ body {
 }
 
 .chord-small {
-    font-size: 0.85em;
-    padding-top: 1px;
+    font-size: 0.87em;
+    padding-top: 0;
+    transform: translateY(2px);
 }
 
 .lyrics {
@@ -575,10 +576,10 @@ body {
 .volta-span::before {
     content: "";
     position: absolute;
-    top: -2px;
+    top: -1px;
     left: -13px;
     right: 0;
-    height: 12px;
+    height: 9px;
     border: 2px solid;
     border-color: var(--volta-color, #7f8c8d);
     border-bottom: 0;
@@ -607,9 +608,9 @@ body {
     height: 0;
     overflow: visible;
     white-space: nowrap;
-    top: 1px;
+    top: 2px;
     left: -10px;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: bold;
     line-height: 1;
     color: var(--volta-color, #7f8c8d);
