@@ -1,6 +1,7 @@
 import os
 import sys
 import argparse
+import logging
 from pathlib import Path
 
 import psycopg2
@@ -14,6 +15,7 @@ from pychord.utils import transpose_note, note_to_val, val_to_note
 INPUT_DIR = "input_cho_test"
 OUTPUT_DIR = "output_jpg"
 TEMPLATE_DIR = "templates"
+LOG_FILE = "converter.log"
 
 # Порог суммарной длины «хвостовых» аккордов (после текста),
 # при превышении которого аккорды хвоста уменьшаются.
@@ -33,6 +35,32 @@ except ImportError:
     load_config = None
 
 
+def _create_logger():
+    """
+    Создаёт файловый логгер.
+    Пишем только WARNING/ERROR в файл, без вывода INFO в консоль.
+    """
+    logger = logging.getLogger("chordpro_converter")
+    logger.setLevel(logging.WARNING)
+    logger.propagate = False
+
+    if not logger.handlers:
+        log_path = _CURRENT_DIR / LOG_FILE
+        file_handler = logging.FileHandler(log_path, encoding="utf-8")
+        file_handler.setLevel(logging.WARNING)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+
+    return logger
+
+
+LOGGER = _create_logger()
+
+
 class DatabaseManager:
     """
     Простой менеджер подключения к Postgres на основе config_data.config.load_config.
@@ -50,10 +78,13 @@ class DatabaseManager:
                     "password": config.db.db_password,
                 }
             except Exception as e:
-                print(f"Ошибка загрузки конфигурации БД: {e}")
+                LOGGER.error(f"Ошибка загрузки конфигурации БД: {e}")
                 self.db_config = {}
         else:
-            print("Предупреждение: не удалось импортировать load_config из config_data.config.")
+            LOGGER.warning(
+                "Не удалось импортировать load_config из config_data.config. "
+                "Работа с БД может быть недоступна."
+            )
             self.db_config = {}
 
         self.conn = None
@@ -63,14 +94,14 @@ class DatabaseManager:
         Устанавливает соединение с БД. Возвращает True при успехе, иначе False.
         """
         if not self.db_config:
-            print("DB config пустой, подключение невозможно.")
+            LOGGER.error("Конфигурация БД пуста, подключение невозможно.")
             return False
 
         try:
             self.conn = psycopg2.connect(**self.db_config)
             return True
         except Exception as e:
-            print(f"Ошибка подключения к базе данных: {e}")
+            LOGGER.error(f"Ошибка подключения к базе данных: {e}")
             return False
 
     def close(self):
@@ -866,10 +897,6 @@ def apply_transforms(song, args):
         args.transpose, args.capo, song.capo
     )
 
-    # Обрабатываем аккорды с учетом входной и выходной нотации
-    if total_transpose != 0:
-        print(f"Transposing by {total_transpose} semitones...")
-
     song.transpose(total_transpose, input_ger=args.ger, output_std=args.std)
 
     # Если capo передан через CLI, он имеет приоритет над входным {capo: ...}.
@@ -878,119 +905,116 @@ def apply_transforms(song, args):
 
     # Опция: раскрыть ссылки на секции
     if args.expand_chorus:
-        print("Expanding section references...")
         song.expand_section_references()
 
 
 def render_song_to_files(
     filename, song, template, browser, layout, input_ger=False, index_chords=False
 ):
-    html_content = render_song_to_html(
-        song, template, layout, input_ger=input_ger, index_chords=index_chords
-    )
+    try:
+        html_content = render_song_to_html(
+            song, template, layout, input_ger=input_ger, index_chords=index_chords
+        )
+    except Exception as e:
+        LOGGER.error(f"Ошибка рендера HTML для '{filename}': {e}")
+        raise
 
     # Сохранить временный HTML
     temp_html_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"{filename}.html"))
-    with open(temp_html_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    try:
+        with open(temp_html_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+    except Exception as e:
+        LOGGER.error(f"Ошибка сохранения HTML '{temp_html_path}': {e}")
+        raise
 
     # Рендер в JPG
     # Ширина задана; высота null/0 — на всю страницу
-    page = browser.new_page(viewport={"width": 800, "height": 600})
+    page = None
+    try:
+        page = browser.new_page(viewport={"width": 800, "height": 600})
 
-    file_url = f"file://{temp_html_path}"
-    page.goto(file_url)
+        file_url = f"file://{temp_html_path}"
+        page.goto(file_url)
 
     # Небольшая пауза для стабилизации вёрстки (для локального статического обычно мгновенно)
     # page.wait_for_timeout(100)
 
     # Компенсация горизонтального вылета абсолютных volta-stack через
     # невидимые spacers в конце строки (без изменения padding секций).
-    overflow_result = page.evaluate(
-        """
-        () => {
-            const lines = Array.from(
-                document.querySelectorAll('.song-container .line, .song-container .section-reference')
-            );
-            let adjustedSpacers = 0;
-            let maxOverflowApplied = 0;
+        page.evaluate(
+            """
+            () => {
+                const lines = Array.from(
+                    document.querySelectorAll('.song-container .line, .song-container .section-reference')
+                );
 
-            for (const line of lines) {
-                const lineRect = line.getBoundingClientRect();
-                if (!lineRect.width) continue;
+                for (const line of lines) {
+                    const lineRect = line.getBoundingClientRect();
+                    if (!lineRect.width) continue;
 
-                // Правая граница фактического контента строки, а не всей
-                // растянутой flex-строки. Это важно для корректного overflow.
-                let contentRight = lineRect.left;
-                for (const child of line.children) {
-                    if (
-                        child.classList &&
-                        child.classList.contains('volta-stack-spacer')
-                    ) {
-                        continue;
+                    // Правая граница фактического контента строки, а не всей
+                    // растянутой flex-строки. Это важно для корректного overflow.
+                    let contentRight = lineRect.left;
+                    for (const child of line.children) {
+                        if (
+                            child.classList &&
+                            child.classList.contains('volta-stack-spacer')
+                        ) {
+                            continue;
+                        }
+                        const childStyle = window.getComputedStyle(child);
+                        if (childStyle.position === 'absolute') {
+                            continue;
+                        }
+                        const childRect = child.getBoundingClientRect();
+                        if (childRect.right > contentRight) {
+                            contentRight = childRect.right;
+                        }
                     }
-                    const childStyle = window.getComputedStyle(child);
-                    if (childStyle.position === 'absolute') {
-                        continue;
+
+                    const anchors = line.querySelectorAll('[data-volta-anchor]');
+                    const spacers = line.querySelectorAll('[data-volta-spacer]');
+                    if (!anchors.length || !spacers.length) continue;
+
+                    // Сброс перед расчётом
+                    for (const spacer of spacers) {
+                        spacer.style.width = '0px';
                     }
-                    const childRect = child.getBoundingClientRect();
-                    if (childRect.right > contentRight) {
-                        contentRight = childRect.right;
-                    }
-                }
 
-                const anchors = line.querySelectorAll('[data-volta-anchor]');
-                const spacers = line.querySelectorAll('[data-volta-spacer]');
-                if (!anchors.length || !spacers.length) continue;
+                    const pairCount = Math.min(anchors.length, spacers.length);
+                    for (let i = 0; i < pairCount; i++) {
+                        const anchor = anchors[i];
+                        const spacer = spacers[i];
+                        const stack = anchor.querySelector('.volta-stack');
+                        if (!stack) continue;
 
-                // Сброс перед расчётом
-                for (const spacer of spacers) {
-                    spacer.style.width = '0px';
-                }
-
-                const pairCount = Math.min(anchors.length, spacers.length);
-                for (let i = 0; i < pairCount; i++) {
-                    const anchor = anchors[i];
-                    const spacer = spacers[i];
-                    const stack = anchor.querySelector('.volta-stack');
-                    if (!stack) continue;
-
-                    const stackRect = stack.getBoundingClientRect();
-                    const overflow = Math.ceil(stackRect.right - contentRight);
-                    if (overflow > 0) {
-                        const applied = overflow + 2;
-                        spacer.style.width = `${applied}px`;
-                        adjustedSpacers += 1;
-                        if (applied > maxOverflowApplied) {
-                            maxOverflowApplied = applied;
+                        const stackRect = stack.getBoundingClientRect();
+                        const overflow = Math.ceil(stackRect.right - contentRight);
+                        if (overflow > 0) {
+                            const applied = overflow + 2;
+                            spacer.style.width = `${applied}px`;
                         }
                     }
                 }
             }
-
-            return {
-                max_overflow: maxOverflowApplied,
-                spacers: adjustedSpacers
-            };
-        }
-        """
-    )
-    if overflow_result and overflow_result.get("max_overflow", 0):
-        print(
-            "Applied volta overflow compensation: "
-            f"+{overflow_result['max_overflow']}px "
-            f"on {overflow_result.get('spacers', 0)} spacer(s)"
+            """
         )
 
-    output_filename = os.path.splitext(filename)[0] + ".jpg"
-    output_path = os.path.join(OUTPUT_DIR, output_filename)
+        output_filename = os.path.splitext(filename)[0] + ".jpg"
+        output_path = os.path.join(OUTPUT_DIR, output_filename)
 
-    # Скриншот контейнера песни, чтобы убрать лишнее поле справа/снизу.
-    locator = page.locator(".song-container")
-    locator.screenshot(path=output_path, type="jpeg", quality=90)
-
-    print(f"Saved {output_path}")
-    page.close()
+        # Скриншот контейнера песни, чтобы убрать лишнее поле справа/снизу.
+        locator = page.locator(".song-container")
+        locator.screenshot(path=output_path, type="jpeg", quality=90)
+    except Exception as e:
+        output_filename = os.path.splitext(filename)[0] + ".jpg"
+        output_path = os.path.join(OUTPUT_DIR, output_filename)
+        LOGGER.error(f"Ошибка создания JPG '{output_path}': {e}")
+        raise
+    finally:
+        if page is not None:
+            page.close()
 
 
 def _get_db_manager():
@@ -1000,7 +1024,7 @@ def _get_db_manager():
     try:
         return DatabaseManager()
     except Exception as e:
-        print(f"Ошибка создания DatabaseManager: {e}")
+        LOGGER.error(f"Ошибка создания менеджера базы данных: {e}")
         return None
 
 
@@ -1010,7 +1034,7 @@ def _fetch_song_chordpro_and_title(db_manager, song_number):
     """
     if not db_manager.conn:
         if not db_manager.connect():
-            print("Не удалось подключиться к базе данных.")
+            LOGGER.error("Не удалось подключиться к базе данных.")
             return None, None
 
     try:
@@ -1027,17 +1051,19 @@ def _fetch_song_chordpro_and_title(db_manager, song_number):
             )
             row = cursor.fetchone()
             if not row:
-                print(f"Песня с номером {song_number} не найдена в БД.")
+                LOGGER.warning(f"Песня №{song_number} не найдена в базе данных. Пропуск.")
                 return None, None
 
             chordpro_text, title = row[0], row[1]
             if chordpro_text is None:
-                print(f"В БД для песни {song_number} поле chordpro пустое (NULL). Пропуск.")
+                LOGGER.warning(
+                    f"Для песни №{song_number} поле chordpro в БД пустое. Пропуск."
+                )
                 return None, title
 
             return chordpro_text, title
     except Exception as e:
-        print(f"Ошибка при чтении chordpro для песни {song_number}: {e}")
+        LOGGER.error(f"Ошибка при чтении ChordPro для песни №{song_number}: {e}")
         return None, None
 
 
@@ -1080,13 +1106,17 @@ def _parse_song_numbers(tokens):
             left = left.strip()
             right = right.strip()
             if not left or not right:
-                print(f"Некорректный диапазон '{token}', пропуск.")
+                LOGGER.warning(
+                    f"Некорректный диапазон номеров: '{token}'. Токен пропущен."
+                )
                 continue
             try:
                 start = int(left)
                 end = int(right)
             except ValueError:
-                print(f"Некорректный диапазон '{token}', пропуск.")
+                LOGGER.warning(
+                    f"Некорректный диапазон номеров: '{token}'. Токен пропущен."
+                )
                 continue
 
             if start > end:
@@ -1100,7 +1130,7 @@ def _parse_song_numbers(tokens):
                 n = int(token)
                 result.add(n)
             except ValueError:
-                print(f"Некорректный номер песни '{token}', пропуск.")
+                LOGGER.warning(f"Некорректный номер песни: '{token}'. Токен пропущен.")
 
     return sorted(result)
 
@@ -1122,7 +1152,10 @@ def render_songs_from_folder(args):
     files = find_input_files(INPUT_DIR)
 
     if not files:
-        print("No .chordpro files found in input directory.")
+        LOGGER.warning(
+            f"Во входной директории '{INPUT_DIR}' не найдено файлов "
+            ".chordpro/.pro/.cho."
+        )
         return
 
     with sync_playwright() as p:
@@ -1130,27 +1163,44 @@ def render_songs_from_folder(args):
         browser = p.chromium.launch()
         try:
             for filename in files:
-                print(f"Processing {filename}...")
                 filepath = os.path.join(INPUT_DIR, filename)
 
                 # Чтение и разбор
-                with open(filepath, "r", encoding="utf-8") as f:
-                    content = f.read()
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except Exception as e:
+                    LOGGER.error(f"Ошибка чтения входного файла '{filepath}': {e}")
+                    continue
 
-                song = parser.parse(content)
-                apply_transforms(song, args)
-                render_song_to_files(
-                    filename,
-                    song,
-                    template,
-                    browser,
-                    args.layout,
-                    input_ger=args.ger,
-                    index_chords=args.small_extensions,
-                )
+                try:
+                    song = parser.parse(content)
+                except Exception as e:
+                    LOGGER.error(f"Ошибка разбора файла '{filename}': {e}")
+                    continue
+
+                try:
+                    apply_transforms(song, args)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Ошибка применения преобразований для '{filename}': {e}"
+                    )
+                    continue
+
+                try:
+                    render_song_to_files(
+                        filename,
+                        song,
+                        template,
+                        browser,
+                        args.layout,
+                        input_ger=args.ger,
+                        index_chords=args.small_extensions,
+                    )
+                except Exception:
+                    continue
         finally:
             browser.close()
-            print("Done!")
 
 
 def render_songs_from_db(args):
@@ -1161,7 +1211,7 @@ def render_songs_from_db(args):
     raw_tokens = args.from_db or []
     song_numbers = _parse_song_numbers(raw_tokens)
     if not song_numbers:
-        print("Не удалось разобрать номера песен для режима -db/--from-db.")
+        LOGGER.error("Не удалось разобрать номера песен для режима --from-db.")
         return
 
     db_manager = _get_db_manager()
@@ -1181,7 +1231,6 @@ def render_songs_from_db(args):
         browser = p.chromium.launch()
         try:
             for song_number in song_numbers:
-                print(f"Processing song #{song_number} from database...")
                 chordpro_text, title = _fetch_song_chordpro_and_title(
                     db_manager, song_number
                 )
@@ -1189,22 +1238,37 @@ def render_songs_from_db(args):
                     # Уже выведено предупреждение, просто пропускаем
                     continue
 
-                song = parser.parse(chordpro_text)
-                apply_transforms(song, args)
                 filename = _make_filename_for_song(song_number, title)
-                render_song_to_files(
-                    filename,
-                    song,
-                    template,
-                    browser,
-                    args.layout,
-                    input_ger=args.ger,
-                    index_chords=args.small_extensions,
-                )
+
+                try:
+                    song = parser.parse(chordpro_text)
+                except Exception as e:
+                    LOGGER.error(f"Ошибка разбора файла '{filename}': {e}")
+                    continue
+
+                try:
+                    apply_transforms(song, args)
+                except Exception as e:
+                    LOGGER.error(
+                        f"Ошибка применения преобразований для '{filename}': {e}"
+                    )
+                    continue
+
+                try:
+                    render_song_to_files(
+                        filename,
+                        song,
+                        template,
+                        browser,
+                        args.layout,
+                        input_ger=args.ger,
+                        index_chords=args.small_extensions,
+                    )
+                except Exception:
+                    continue
         finally:
             browser.close()
             db_manager.close()
-            print("Done!")
 
 
 def main():
