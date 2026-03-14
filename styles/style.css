@@ -277,6 +277,17 @@ body {
     align-items: flex-end;
 }
 
+/* Для секций без аккордов увеличиваем вертикальное дыхание текста. */
+.section.no-chords .line {
+    margin-bottom: 3px;
+    line-height: 1.35;
+}
+
+.section.no-chords .lyrics {
+    height: auto;
+    line-height: 1.35;
+}
+
 .chord-wrapper {
     display: flex;
     flex-direction: column;
@@ -302,6 +313,10 @@ body {
     font-size: 0.75em;
     /*vertical-align: sub;
     margin-left: -1px;*/
+}
+
+.chord-backslash {
+    font-size: 0.8em;
 }
 
 .chord-small {

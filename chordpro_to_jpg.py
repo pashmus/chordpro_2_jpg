@@ -6,6 +6,7 @@ from pathlib import Path
 import psycopg2
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
+from markupsafe import Markup, escape
 from chordpro import ChordProParser
 from pychord.utils import transpose_note, note_to_val, val_to_note
 
@@ -186,6 +187,20 @@ def find_input_files(input_dir):
     ]
 
 
+def format_chord_backslashes(value):
+    """
+    Оборачивает каждый обратный слэш в отдельный span для стилизации.
+    Нужен для уменьшения символа '\' в аккордах и grid-тексте.
+    """
+    if value is None:
+        return ""
+
+    escaped = escape(str(value))
+    return Markup(
+        str(escaped).replace("\\", '<span class="chord-backslash">\\</span>')
+    )
+
+
 def collect_parts(items):
     parts = []
     for item in items:
@@ -343,6 +358,26 @@ def _item_has_chords(item):
         for child in getattr(item, "parts", []):
             if _item_has_chords(child):
                 return True
+
+    return False
+
+
+def _section_has_any_chords(section):
+    """
+    Проверяет, есть ли в секции хотя бы один аккорд.
+    Учитывает обычные строки/вольты и grid-ячейки.
+    """
+    for line in getattr(section, "lines", []):
+        # Обычные строки (включая вложенные volta-группы)
+        for part in collect_parts(getattr(line, "parts", [])):
+            if getattr(part, "chord", None) and str(part.chord).strip():
+                return True
+
+        # Сетка (grid)
+        for cell in getattr(line, "grid_cells", []):
+            for cell_part in getattr(cell, "parts", []):
+                if getattr(cell_part, "chord", None) and str(cell_part.chord).strip():
+                    return True
 
     return False
 
@@ -681,6 +716,8 @@ def build_sections_data(song, index_chords=False):
                     }
                 )
 
+        no_chords = bool(sec.lines) and not _section_has_any_chords(sec)
+
         sections_data.append(
             {
                 "type": sec.type,
@@ -688,6 +725,7 @@ def build_sections_data(song, index_chords=False):
                 "lines": lines_data,
                 "offset_label": offset_label,
                 "special_style": special_style,
+                "no_chords": no_chords,
             }
         )
 
@@ -1063,6 +1101,7 @@ def render_songs_from_folder(args):
     # Инициализация парсера и шаблона
     parser = ChordProParser()
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    env.filters["chord_backslash"] = format_chord_backslashes
     template = env.get_template("song.html")
 
     # Поиск файлов
@@ -1121,6 +1160,7 @@ def render_songs_from_db(args):
     # Инициализация парсера и шаблона
     parser = ChordProParser()
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+    env.filters["chord_backslash"] = format_chord_backslashes
     template = env.get_template("song.html")
 
     with sync_playwright() as p:

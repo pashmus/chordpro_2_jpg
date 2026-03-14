@@ -31,7 +31,7 @@
 
         <div class="song-body">
             {% for section in sections %}
-            <div class="section {{ section.type }} {% if not section.lines %}section-empty{% endif %} {% if section.offset_label %}offset-label{% endif %} {% if section.label == 'Tag:' %}section-tag{% endif %}">
+            <div class="section {{ section.type }} {% if not section.lines %}section-empty{% endif %} {% if section.offset_label %}offset-label{% endif %} {% if section.no_chords %}no-chords{% endif %} {% if section.label == 'Tag:' %}section-tag{% endif %}">
                 {% if section.label or layout == 'sidebar' %}
                     {% if not section.lines and section.special_style %}
                     <div class="section-label">
@@ -106,16 +106,16 @@
                                                         {% set parts = part.chord_base.split('/') %}
                                                         <span class="grid-chord">
                                                             {% if parts|length == 2 %}
-                                                                {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                {{ parts[0] | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                             {% else %}
-                                                                {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                {{ part.chord_base | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>
                                                             {% endif %}
                                                         </span>
                                                     {% else %}
-                                                        <span class="grid-chord">{{ part.chord }}</span>
+                                                        <span class="grid-chord">{{ part.chord | chord_backslash }}</span>
                                                     {% endif %}
                                                 {% else %}
-                                                    <span class="grid-text">{{ part.text }}</span>
+                                                    <span class="grid-text">{{ part.text | chord_backslash }}</span>
                                                 {% endif %}
                                             {% endfor %}
                                         </td>
@@ -124,7 +124,7 @@
                             {% else %}
                                 <!-- Запасной вариант при ошибке разбора сетки или пустой -->
                                 <td colspan="100%">
-                                    {% for part in line.parts %}{{ part.text or part.chord }}{% endfor %}
+                                    {% for part in line.parts %}{{ (part.text or part.chord) | chord_backslash }}{% endfor %}
                                 </td>
                             {% endif %}
                         </tr>
@@ -148,12 +148,12 @@
                                                                         {% if index_chords and part.chord_extra %}
                                                                             {% set parts = part.chord_base.split('/') %}
                                                                             {% if parts|length == 2 %}
-                                                                                {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                                {{ parts[0] | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                             {% else %}
-                                                                                {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                                {{ part.chord_base | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>
                                                                             {% endif %}
                                                                         {% else %}
-                                                                            {{ part.chord }}
+                                                                            {{ part.chord | chord_backslash }}
                                                                         {% endif %}
                                                                     </span>
                                                                 {% endif %}
@@ -174,12 +174,12 @@
                                                                                     {% if index_chords and sp.chord_extra %}
                                                                                         {% set parts = sp.chord_base.split('/') %}
                                                                                         {% if parts|length == 2 %}
-                                                                                            {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                                            {{ parts[0] | chord_backslash }}<span class="chord-index">{{ sp.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                                         {% else %}
-                                                                                            {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                                            {{ sp.chord_base | chord_backslash }}<span class="chord-index">{{ sp.chord_extra | chord_backslash }}</span>
                                                                                         {% endif %}
                                                                                     {% else %}
-                                                                                        {{ sp.chord }}
+                                                                                        {{ sp.chord | chord_backslash }}
                                                                                     {% endif %}
                                                                                 </span>
                                                                             </span>
@@ -206,12 +206,12 @@
                                                                     {% if index_chords and part.chord_extra %}
                                                                         {% set parts = part.chord_base.split('/') %}
                                                                         {% if parts|length == 2 %}
-                                                                            {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                            {{ parts[0] | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                         {% else %}
-                                                                            {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                            {{ part.chord_base | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>
                                                                         {% endif %}
                                                                     {% else %}
-                                                                        {{ part.chord }}
+                                                                        {{ part.chord | chord_backslash }}
                                                                     {% endif %}
                                                                 </span>
                                                             {% endif %}
@@ -228,12 +228,12 @@
                                                         {% if index_chords and item.chord_extra %}
                                                             {% set parts = item.chord_base.split('/') %}
                                                             {% if parts|length == 2 %}
-                                                                {{ parts[0] }}<span class="chord-index">{{ item.chord_extra }}</span>/{{ parts[1] }}
+                                                                {{ parts[0] | chord_backslash }}<span class="chord-index">{{ item.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                             {% else %}
-                                                                {{ item.chord_base }}<span class="chord-index">{{ item.chord_extra }}</span>
+                                                                {{ item.chord_base | chord_backslash }}<span class="chord-index">{{ item.chord_extra | chord_backslash }}</span>
                                                             {% endif %}
                                                         {% else %}
-                                                            {{ item.chord }}
+                                                            {{ item.chord | chord_backslash }}
                                                         {% endif %}
                                                     </span>
                                                 {% endif %}
@@ -263,12 +263,12 @@
                                                                 {% if index_chords and part.chord_extra %}
                                                                     {% set parts = part.chord_base.split('/') %}
                                                                     {% if parts|length == 2 %}
-                                                                        {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                        {{ parts[0] | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                     {% else %}
-                                                                        {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                        {{ part.chord_base | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>
                                                                     {% endif %}
                                                                 {% else %}
-                                                                    {{ part.chord }}
+                                                                    {{ part.chord | chord_backslash }}
                                                                 {% endif %}
                                                             </span>
                                                         {% endif %}
@@ -289,12 +289,12 @@
                                                                             {% if index_chords and sp.chord_extra %}
                                                                                 {% set parts = sp.chord_base.split('/') %}
                                                                                 {% if parts|length == 2 %}
-                                                                                    {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                                    {{ parts[0] | chord_backslash }}<span class="chord-index">{{ sp.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                                 {% else %}
-                                                                                    {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                                    {{ sp.chord_base | chord_backslash }}<span class="chord-index">{{ sp.chord_extra | chord_backslash }}</span>
                                                                                 {% endif %}
                                                                             {% else %}
-                                                                                {{ sp.chord }}
+                                                                                {{ sp.chord | chord_backslash }}
                                                                             {% endif %}
                                                                         </span>
                                                                     </span>
@@ -321,12 +321,12 @@
                                                             {% if index_chords and part.chord_extra %}
                                                                 {% set parts = part.chord_base.split('/') %}
                                                                 {% if parts|length == 2 %}
-                                                                    {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                    {{ parts[0] | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                                 {% else %}
-                                                                    {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                    {{ part.chord_base | chord_backslash }}<span class="chord-index">{{ part.chord_extra | chord_backslash }}</span>
                                                                 {% endif %}
                                                             {% else %}
-                                                                {{ part.chord }}
+                                                                {{ part.chord | chord_backslash }}
                                                             {% endif %}
                                                         </span>
                                                     {% endif %}
@@ -343,12 +343,12 @@
                                                 {% if index_chords and item.chord_extra %}
                                                     {% set parts = item.chord_base.split('/') %}
                                                     {% if parts|length == 2 %}
-                                                        {{ parts[0] }}<span class="chord-index">{{ item.chord_extra }}</span>/{{ parts[1] }}
+                                                        {{ parts[0] | chord_backslash }}<span class="chord-index">{{ item.chord_extra | chord_backslash }}</span>/{{ parts[1] | chord_backslash }}
                                                     {% else %}
-                                                        {{ item.chord_base }}<span class="chord-index">{{ item.chord_extra }}</span>
+                                                        {{ item.chord_base | chord_backslash }}<span class="chord-index">{{ item.chord_extra | chord_backslash }}</span>
                                                     {% endif %}
                                                 {% else %}
-                                                    {{ item.chord }}
+                                                    {{ item.chord | chord_backslash }}
                                                 {% endif %}
                                             </span>
                                         {% endif %}
