@@ -603,44 +603,10 @@ def build_sections_data(song, index_chords=False):
                             is_floating=role["is_floating"],
                             floating_siblings=role["floating_siblings"],
                         )
-
-                        # Для standalone-вольты (не anchor и не floating):
-                        # если в последней части вольты есть и аккорд, и текст,
-                        # текст выносим в отдельный обычный Part после вольты.
-                        # Это нужно, чтобы скобка standalone заканчивалась на
-                        # закрывающем аккорде, а не тянулась до следующего аккорда.
-                        trailing_text_part = None
-                        if (
-                            not role["is_anchor"]
-                            and not role["is_floating"]
-                            and part_dict.get("parts")
-                        ):
-                            last_child = part_dict["parts"][-1]
-                            if (
-                                isinstance(last_child, dict)
-                                and last_child.get("chord")
-                                and last_child.get("text")
-                            ):
-                                moved_text = last_child.get("text", "")
-                                if moved_text:
-                                    last_child["text"] = ""
-                                    trailing_text_part = {
-                                        "chord": None,
-                                        "text": moved_text,
-                                        "volta": None,
-                                        "is_volta_group": False,
-                                        "small_chord": False,
-                                    }
-
                         _apply_chord_split_to_part_dict(
                             part_dict, enable_index=index_chords
                         )
                         parts_data.append(part_dict)
-                        if trailing_text_part is not None:
-                            _apply_chord_split_to_part_dict(
-                                trailing_text_part, enable_index=index_chords
-                            )
-                            parts_data.append(trailing_text_part)
                     else:
                         part_dict = serialize_item(part)
                         _apply_chord_split_to_part_dict(
@@ -833,84 +799,6 @@ def render_song_to_files(
 
     # Небольшая пауза для стабилизации вёрстки (для локального статического обычно мгновенно)
     # page.wait_for_timeout(100)
-
-    # Компенсация горизонтального вылета абсолютных volta-stack через
-    # невидимые spacers в конце строки (без изменения padding секций).
-    overflow_result = page.evaluate(
-        """
-        () => {
-            const lines = Array.from(
-                document.querySelectorAll('.song-container .line, .song-container .section-reference')
-            );
-            let adjustedSpacers = 0;
-            let maxOverflowApplied = 0;
-
-            for (const line of lines) {
-                const lineRect = line.getBoundingClientRect();
-                if (!lineRect.width) continue;
-
-                // Правая граница фактического контента строки, а не всей
-                // растянутой flex-строки. Это важно для корректного overflow.
-                let contentRight = lineRect.left;
-                for (const child of line.children) {
-                    if (
-                        child.classList &&
-                        child.classList.contains('volta-stack-spacer')
-                    ) {
-                        continue;
-                    }
-                    const childStyle = window.getComputedStyle(child);
-                    if (childStyle.position === 'absolute') {
-                        continue;
-                    }
-                    const childRect = child.getBoundingClientRect();
-                    if (childRect.right > contentRight) {
-                        contentRight = childRect.right;
-                    }
-                }
-
-                const anchors = line.querySelectorAll('[data-volta-anchor]');
-                const spacers = line.querySelectorAll('[data-volta-spacer]');
-                if (!anchors.length || !spacers.length) continue;
-
-                // Сброс перед расчётом
-                for (const spacer of spacers) {
-                    spacer.style.width = '0px';
-                }
-
-                const pairCount = Math.min(anchors.length, spacers.length);
-                for (let i = 0; i < pairCount; i++) {
-                    const anchor = anchors[i];
-                    const spacer = spacers[i];
-                    const stack = anchor.querySelector('.volta-stack');
-                    if (!stack) continue;
-
-                    const stackRect = stack.getBoundingClientRect();
-                    const overflow = Math.ceil(stackRect.right - contentRight);
-                    if (overflow > 0) {
-                        const applied = overflow + 2;
-                        spacer.style.width = `${applied}px`;
-                        adjustedSpacers += 1;
-                        if (applied > maxOverflowApplied) {
-                            maxOverflowApplied = applied;
-                        }
-                    }
-                }
-            }
-
-            return {
-                max_overflow: maxOverflowApplied,
-                spacers: adjustedSpacers
-            };
-        }
-        """
-    )
-    if overflow_result and overflow_result.get("max_overflow", 0):
-        print(
-            "Applied volta overflow compensation: "
-            f"+{overflow_result['max_overflow']}px "
-            f"on {overflow_result.get('spacers', 0)} spacer(s)"
-        )
 
     output_filename = os.path.splitext(filename)[0] + ".jpg"
     output_path = os.path.join(OUTPUT_DIR, output_filename)

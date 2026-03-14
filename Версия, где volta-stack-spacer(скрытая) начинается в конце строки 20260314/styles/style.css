@@ -1,0 +1,662 @@
+/* Подключение всех выбранных шрифтов сразу */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@500;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Poppins:wght@400;700&family=Roboto:wght@400;700&display=swap');
+
+:root{
+    --indent-text: -2px;
+    --indent-chord: calc(var(--indent-text) + 18px);
+    --chord-color: #e74c3c;
+    --chorus-bg-color: #e1edfc;  /* Привязано к .layout-sidebar .section.chorus .section-content */
+    --pre-chorus-bg-color: #f5f9ff;  /* Привязано к .layout-sidebar .section.pre_chorus .section-content */
+    --bridge-bg-color: #fff3e1;  /* Привязано к .layout-sidebar .section.bridge .section-content */
+}
+
+body {
+    font-family: 'Montserrat', sans-serif;
+    background-color: #ffffff;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    /* width: 800px; убрано, чтобы контейнер подстраивался под содержимое */
+}
+
+.song-container {
+    background: #fff;
+    padding: 17px 8px 10px 12px;
+    box-sizing: border-box;
+    display: inline-block; /* Подстройка под содержимое */
+}
+
+.song-header {
+    border-bottom: 2px solid #eee;
+    margin-bottom: 8px;
+    padding-bottom: 7px;
+}
+
+.song-title {
+    font-size: 28px;
+    margin: 0 0 7px 10px;
+    color: #2c3e50;
+    text-align: left;
+}
+
+.song-meta {
+    margin-left: 10px;
+    font-size: 16px;
+    color: #606b6c;
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.song-body {
+    width: 100%;
+}
+
+.section {
+    margin-bottom: 17px;
+    page-break-inside: avoid;
+}
+
+.section.verse { margin-bottom: 17px; }
+
+.layout-sidebar .section.verse .section-content { padding: 5px; }
+
+/* Стандартные стили макета (по умолчанию, если не переопределено) */
+.section.chorus {
+    background-color: #f8f9fa;
+/*    padding: 50px;*/
+    border-left: 5px solid #3498db;
+    border-radius: 6px;
+}
+
+.section.pre_chorus {
+    background-color: #f0f6f9; /* Более светлый/серо-голубой фон */
+    border-left: 5px solid #90a4ae; /* Серо-голубой бордер */
+    border-radius: 6px;
+}
+
+/* Пустой припев (стандартный макет) */
+.section.chorus.section-empty {
+    /* Стили припева + дополнительный отступ */
+    margin-bottom: 20px;
+}
+
+.section.chorus.section-empty .section-label {
+    margin-top: 8px; /* Компенсация margin-bottom для вертикального центрирования */
+}
+
+/* Стиль секции-тега (общий) */
+.section.section-tag {
+    background-color: #fdf2f9; /* Очень светло-фиолетовый/розовый */
+/*    padding: 15px;*/
+    border-left: 5px solid #dba6cd; /* Мягкий розово-фиолетовый */
+    border-radius: 6px;
+/*    margin-bottom: 20px;*/
+}
+
+.section.bridge {
+    background-color: #fff9f0;
+/*    padding: 15px;*/
+    border-left: 5px solid #e67e22;
+    border-radius: 6px;
+/*    margin-bottom: 20px;*/
+}
+
+.section.grid {
+    font-family: 'Courier New', monospace;
+    background-color: #effaf6; /* Очень светлый бирюзовый */
+    padding: 10px;
+    border-left: 5px solid #48c9b0; /* Бирюзовый */
+    border-radius: 6px;
+    color: #555;
+    margin-bottom: 15px;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+.section.grid .chord-wrapper,
+.section.grid .chord,
+.section.grid .lyrics,
+.section.grid .line {
+    /* Сброс старых переопределений */
+    display: initial;
+    margin: 0;
+}
+
+.grid-table {
+    border-collapse: collapse;
+    margin-bottom: 5px;
+}
+
+.grid-bar {
+    font-family: 'Courier New', monospace;
+    padding: 0;
+    color: #48c9b0; /* В тон бордеру/теме секции */
+    font-weight: bold;
+    width: 10px; /* Фиксированная ширина для оси выравнивания */
+    text-align: center;
+    vertical-align: middle;
+    position: relative; /* Контекст для volta */
+}
+
+/* Стили знаков повтора — переработано для центрированной оси */
+.repeat-sign {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    height: 1.25em;
+    gap: 1.5px;
+}
+
+.repeat-sign .thick-line {
+    width: 3px;
+    height: 100%;
+    background-color: currentColor;
+    display: block;
+}
+
+.repeat-sign .thin-line {
+    width: 1.2px;
+    height: 100%;
+    background-color: currentColor;
+    display: block;
+}
+
+.repeat-sign .repeat-dots {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+}
+
+.repeat-sign .repeat-dots::before,
+.repeat-sign .repeat-dots::after {
+    content: "";
+    width: 2.2px;
+    height: 2.2px;
+    background-color: currentColor;
+    border-radius: 50%;
+    display: block;
+}
+
+/* Выровнять основную линию повтора по оси 50% */
+.repeat-sign.start {
+    padding-left: 6.5px; /* Смещение для центрирования толстой линии */
+}
+
+.repeat-sign.end {
+    padding-right: 6.5px; /* Смещение для центрирования толстой линии */
+}
+
+.grid-measure {
+    position: relative;
+    padding: 2px 5px 2px 0px;
+    vertical-align: top;
+    white-space: nowrap;
+}
+
+.grid-measure.empty-measure {
+    width: 2px; /* Минимальная ширина, чтобы сблизить черты */
+    min-width: 2px;
+    padding: 0;
+}
+
+.grid-measure.shifted {
+    padding-left: 11px;
+}
+
+.grid-volta {
+    position: absolute;
+    top: 1px;
+    left: 50%;
+    transform: translateX(-1px); /* Совместить центр 2px бордера с осью черты */
+    font-size: 11px;
+    color: #48c9b0;
+    font-weight: bold;
+    white-space: nowrap;
+    padding: 0px 10px 2px 2px;
+    border: 2px solid #48c9b0;
+    border-width: 2px 0px 0px 2px;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.bar-start-repeat {
+    width: 22px;
+}
+
+.bar-end-repeat {
+    padding-left: 8px;
+}
+
+/* Дополнительный сдвиг volta после знака конца повтора */
+.bar-end-repeat .grid-volta {
+    left: calc(50% + 4px); /* Сдвиг вправо, чтобы начинать после толстой линии */
+}
+
+.grid-chord {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: var(--chord-color);
+    font-size: 17px;
+}
+
+.grid-text {
+    font-family: 'Courier New', monospace;
+    color: #555;
+    font-size: 17px;
+}
+
+.section.grid .line {
+    margin-bottom: 5px;
+    display: block;
+    white-space: pre-wrap; /* Сохранить пробелы */
+}
+
+.section.grid .line span {
+    display: inline;
+}
+
+.section-label {
+    font-weight: bold;
+    font-size: 14.5px;
+    text-transform: uppercase;
+    color: #606b6c;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.line {
+    margin-bottom: var(--indent-text);
+    line-height: 1.2;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.chord-wrapper {
+    display: flex;
+    flex-direction: column;
+    /* margin-right убран, чтобы не разрывать слова в тексте */
+    margin-right: 0;
+}
+
+.chord {
+    font-weight: bold;
+    color: var(--chord-color);
+    font-size: 17px;
+    font-family: 'Lato', sans-serif;
+    white-space: nowrap;
+    height: var(--indent-chord);
+    /* Отступ только у аккорда: при chord+padding > lyric обёртка расширяется — появляется место;
+       при chord+padding < lyric обёртка = lyric — в потоке текста места не создаётся.
+       Нужно: «Место только когда аккорду нужно». */
+    padding-right: 5px; /* Визуальный отступ после названия аккорда */
+    position: relative;
+}
+
+.chord-index {
+    font-size: 0.75em;
+    /*vertical-align: sub;
+    margin-left: -1px;*/
+}
+
+.chord-small {
+    font-size: 0.85em;
+    padding-top: 1px;
+}
+
+.lyrics {
+    font-size: 18px;
+    color: #2c3e50;
+    white-space: pre;
+    height: 22px;
+}
+
+/* Стили комментариев */
+.line.comment {
+    display: block; /* Обычный блочный поток */
+    line-height: 1.5;
+    background-color: #fafafa;
+    border: 1px solid #eee;
+    padding: 1px 8px;
+    margin: -7px 0px -7px -10px;
+    border-radius: 4px;
+    color: #555;
+}
+
+.line.comment .chord-wrapper {
+    display: inline;
+    flex-direction: row;
+    margin-right: 0;
+}
+
+.line.comment .chord {
+    display: inline;
+    font-size: 16px;
+    margin-bottom: 0;
+    height: auto;
+    padding-right: 0;
+}
+
+.line.comment .lyrics {
+    display: inline;
+    font-size: 17px;
+    font-style: italic;
+    font-weight: bold;
+    white-space: normal;
+    height: auto;
+    color: #555;
+}
+
+/* Стили ссылок на секции ({chorus: текст}, {comment: текст} с особыми шаблонами) */
+.section-reference {
+    display: inline-block;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 14px;
+    color: #606b6c;
+    min-width: 120px;
+    width: max-content;
+    padding: 1px 8px;
+    margin-left: -40px;
+    border-radius: 4px;
+    line-height: 1.5;
+    white-space: normal;
+}
+
+.section-reference .chord-wrapper {
+    display: inline;
+    flex-direction: row;
+    margin-right: 0;
+}
+
+.section-reference .chord {
+    display: inline;
+    font-size: 16px;
+    margin-bottom: 0;
+    height: auto;
+    padding-right: 0;
+}
+
+.section-reference .lyrics {
+    display: inline;
+    font-family: 'Courier New', monospace;
+    font-size: 17px;
+    font-weight: bold;
+    color: #606b6c;
+    white-space: normal;
+    height: auto;
+}
+
+.section-reference.chorus {
+    background-color: var(--chorus-bg-color);
+    color: #2c3e50;
+}
+
+.section-reference.pre_chorus {
+    background-color: var(--pre-chorus-bg-color);
+    color: #2c3e50;
+}
+
+.section-reference.bridge {
+    background-color: var(--bridge-bg-color);
+    color: #2c3e50;
+}
+
+/* Особое позиционирование пустых припевов в section-content */
+/* У комментариев margin-left: -10px (.line.comment); для пустых секций компенсируем */
+/* Чтобы совпасть с комментариями: -40px (база) - 10px (margin-left комментария) = -50px */
+.section-content > .section-reference {
+    margin-left: -50px;
+}
+
+/* --- Sidebar Layout --- */
+.layout-sidebar .section {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+}
+
+.layout-sidebar .section-label {
+    width: 85px;
+    padding-right: 4px;
+    box-sizing: border-box;
+    margin-bottom: 0;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Общий стиль для всех секций */
+.layout-sidebar .section-content {
+    padding-top: 2px;
+    padding-bottom: 8px;
+    padding-right: 12px;
+    flex-grow: 1;
+    width: auto;
+}
+
+/* Специальное правило только для комментариев */
+.layout-sidebar .section.comment .section-content {
+    padding-top: 1px;
+    padding-bottom: 2px;
+}
+
+/* Сброс стилей блоков для сайдбара (перенос в контент) */
+.layout-sidebar .section.chorus,
+.layout-sidebar .section.pre_chorus,
+.layout-sidebar .section.bridge,
+.layout-sidebar .section.section-tag,
+.layout-sidebar .section.grid {
+    background-color: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+}
+
+.section-content {
+    padding-left: 12px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+}
+
+/* Применить стили блоков к контенту в сайдбаре */
+.layout-sidebar .section.chorus .section-content {
+    background-color: var(--chorus-bg-color);
+    border-left: 5px solid #3498db;
+    border-radius: 6px;
+}
+
+.layout-sidebar .section.pre_chorus .section-content {
+    background-color: var(--pre-chorus-bg-color);
+    border-left: 5px solid #9ca8b9;
+    border-radius: 6px;
+}
+
+/* Пустой припев (макет с сайдбаром) */
+.layout-sidebar .section.chorus.section-empty .section-content {
+    background-color: transparent;
+    /*padding: 0;*/
+    padding-top: 0px;
+    padding-bottom: 0px;
+    border: none;
+}
+
+.layout-sidebar .section.chorus.section-empty {
+    margin-top: 0px;
+    margin-bottom: 15px;
+}
+
+.layout-sidebar .section.bridge .section-content {
+    background-color: var(--bridge-bg-color);
+    border-left: 5px solid #e67e22;
+    border-radius: 6px;
+}
+
+/* Стиль тега в сайдбаре */
+.layout-sidebar .section.section-tag .section-content {
+    background-color: #fdf2f9;
+    border-left: 5px solid #dba6cd;
+    border-radius: 6px;
+}
+
+.layout-sidebar .section.grid .section-content {
+    font-family: 'Courier New', monospace;
+    background-color: #effaf6;
+    padding: 5px 2px 0px 10px;
+    border-left: 5px solid #48c9b0;
+    border-radius: 6px;
+    color: #555;
+    white-space: normal;
+    line-height: 1.2;
+}
+
+/* Смещения выравнивания в сайдбаре */
+
+/* Случай 1: куплет (без padding) */
+/* При offset-label (аккорды + текст) сдвигать метку вниз на высоту аккорда (21px) */
+.layout-sidebar .section.verse.offset-label .section-label {
+    margin-top: 9px;
+}
+
+/* Случай 2: припев/бридж (padding 15px) */
+/* Базовое выравнивание только текста или контента сверху: по началу padding */
+.layout-sidebar .section.chorus .section-label,
+.layout-sidebar .section.pre_chorus .section-label,
+.layout-sidebar .section.bridge .section-label,
+.layout-sidebar .section.section-tag .section-label {
+    margin-top: 7px;
+}
+/* При offset-label (аккорды + текст) сдвигать метку ещё (15 + 21 = 36px) */
+.layout-sidebar .section.chorus.offset-label .section-label,
+.layout-sidebar .section.pre_chorus.offset-label .section-label,
+.layout-sidebar .section.bridge.offset-label .section-label,
+.layout-sidebar .section.section-tag.offset-label .section-label {
+    margin-top: 6px;
+}
+
+/* Сброс смещения для пустого припева в сайдбаре */
+.layout-sidebar .section.chorus.section-empty .section-label {
+    margin-top: 0;
+}
+
+/* Случай 3: сетка (padding 10px) */
+.layout-sidebar .section.grid .section-label {
+    margin-top: 9px;
+}
+.layout-sidebar .section.grid.offset-label .section-label {
+    margin-top: -5px;
+}
+.section-label {
+    font-family: 'Courier New', monospace;
+}
+.chord .grid-volta {
+    top: -2px;
+    right: auto;
+    left: -11px;
+    color: var(--chord-color);
+    border-color: var(--chord-color);
+}
+
+/* Стили volta для обычного текста */
+.volta-span {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-end;
+    padding: 0;
+    margin: 0;
+    /* margin-right не использовать — ломает поток текста.
+       Расстояние между скобками задаётся .volta-stack и .in-stack. */
+    margin-right: 0;
+}
+.volta-span::before {
+    content: "";
+    position: absolute;
+    top: -2px;
+    left: -13px;
+    right: 0;
+    height: 12px;
+    border: 2px solid;
+    border-color: var(--volta-color, #7f8c8d);
+    border-bottom: 0;
+    border-width: 2px 2px 0 2px;
+    pointer-events: none;
+    z-index: 0;
+}
+/* Для самостоятельной volta:
+   скобка должна ограничиваться шириной аккорда, а не всего слова. */
+.volta-span.standalone::before {
+    display: block;
+}
+.volta-span.standalone .chord-wrapper {
+    align-items: flex-start;
+}
+.volta-span.standalone .standalone-head-chord {
+    position: relative;
+    z-index: 1;
+}
+.volta-span.standalone .standalone-head-chord::before {
+    display: none;
+}
+.volta-number {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: visible;
+    white-space: nowrap;
+    top: 1px;
+    left: -10px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--volta-color, #7f8c8d);
+    z-index: 5;
+}
+.volta-1 { --volta-color: #2980b9; }
+.volta-2 { --volta-color: #8e44ad; }
+.volta-3 { --volta-color: #27ae60; }
+.volta-flow {
+    position: relative;
+    display: inline-flex;
+    align-items: flex-start;
+    white-space: nowrap;
+}
+.volta-span .chord-wrapper {
+    z-index: 1;
+}
+
+/* Стек voltas для каскада (2-я, 3-я volta) */
+.volta-stack {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    display: flex;
+    white-space: nowrap;
+    z-index: 10;
+    /* margin-left для компенсации отрицательных смещений и зазора между соседями */
+    margin-left: 15px;
+}
+
+/* Скрытый spacer: участвует в ширине строки, но не виден */
+.volta-stack-spacer {
+    display: inline-flex;
+    align-items: flex-start;
+    white-space: nowrap;
+    margin-left: 15px;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* У voltas в стеке — свои скобки и номера */
+.volta-span.in-stack {
+    display: inline-flex;
+    margin-right: 15px; /* Зазор между voltas в стеке */
+}
+
+.volta-span.in-stack:last-child {
+    margin-right: 0;
+}
+

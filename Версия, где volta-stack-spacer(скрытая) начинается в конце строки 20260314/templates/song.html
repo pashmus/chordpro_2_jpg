@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="../styles/style.css">
+</head>
+<body>
+    <div class="song-container layout-{{ layout }}">
+        <header class="song-header">
+            <h1 class="song-title">{{ title }}</h1>
+            <div class="song-meta">
+                {% if artist %}
+                <span class="meta-item"><strong>Автор:</strong> {{ artist }}</span>
+                {% endif %}
+                {% if capo %}
+                <span class="meta-item"><strong>Capo:</strong> {{ capo }}</span>
+                {% endif %}
+                {% if key %}
+                <span class="meta-item"><strong>Key:</strong> {{ key }}</span>
+                {% endif %}
+                {% if time %}
+                <span class="meta-item"><strong>Time:</strong> {{ time }}</span>
+                {% endif %}
+                {% if tempo %}
+                <span class="meta-item"><strong>Tempo:</strong> {{ tempo }} bpm</span>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="song-body">
+            {% for section in sections %}
+            <div class="section {{ section.type }} {% if not section.lines %}section-empty{% endif %} {% if section.offset_label %}offset-label{% endif %} {% if section.label == 'Tag:' %}section-tag{% endif %}">
+                {% if section.label or layout == 'sidebar' %}
+                    {% if not section.lines and section.special_style %}
+                    <div class="section-label">
+                        {# Пустая секция со специальным стилем — метка будет в section-content #}
+                    </div>
+                    {% else %}
+                        <div class="section-label">
+                            {% if section.offset_label %}<br/>{% endif %}
+                            {{ section.label }}</div>
+                    {% endif %}
+                {% endif %}
+
+                <div class="section-content">
+                    {% if not section.lines and section.special_style %}
+                        {# Пустая секция со специальным стилем — отображать как section-reference #}
+                        <div class="section-reference {{ section.special_style }}">
+                            <span class="lyrics">{{ section.label }}</span>
+                        </div>
+                    {% else %}
+                        {% if section.type == 'grid' %}
+                        <table class="grid-table">
+                        {% for line in section.lines %}
+                        <tr>
+                            {% if line.grid_cells %}
+                                {% for cell in line.grid_cells %}
+                                    {% if cell.is_bar %}
+                                        <td class="grid-bar bar-{{ cell.bar_type }}">
+                                            {% if cell.volta %}
+                                                <span class="grid-volta">{{ cell.volta }}</span>
+                                            {% endif %}
+
+                                            {% if cell.bar_type == 'start-repeat' %}
+                                                <div class="repeat-sign start">
+                                                    <span class="thick-line"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="repeat-dots"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'end-repeat' %}
+                                                <div class="repeat-sign end">
+                                                    <span class="repeat-dots"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="thick-line"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'repeat-both' %}
+                                                <div class="repeat-sign both">
+                                                    <span class="repeat-dots"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="thick-line"></span>
+                                                    <span class="thin-line"></span>
+                                                    <span class="repeat-dots"></span>
+                                                </div>
+                                            {% elif cell.bar_type == 'double-bar' %}
+                                                <div class="repeat-sign double">
+                                                    <span class="thin-line"></span>
+                                                    <span class="thin-line"></span>
+                                                </div>
+                                            {% else %}
+                                                {% if not cell.volta %}
+                                                    <span class="bar-char">{{ cell.text }}</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
+                                    {% else %}
+                                        <td class="grid-measure {% if cell.is_shifted %}shifted{% endif %} {% if cell.is_empty %}empty-measure{% endif %}">
+                                            {% if cell.volta %}
+                                                <!-- Запасной вариант, если volta не перенесена (напр. начало строки) -->
+                                                <span class="grid-volta">{{ cell.volta }}</span>
+                                            {% endif %}
+                                            {% for part in cell.parts %}
+                                                {% if part.chord %}
+                                                    {% if index_chords and part.chord_extra %}
+                                                        {% set parts = part.chord_base.split('/') %}
+                                                        <span class="grid-chord">
+                                                            {% if parts|length == 2 %}
+                                                                {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                            {% else %}
+                                                                {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                            {% endif %}
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="grid-chord">{{ part.chord }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="grid-text">{{ part.text }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </td>
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                <!-- Запасной вариант при ошибке разбора сетки или пустой -->
+                                <td colspan="100%">
+                                    {% for part in line.parts %}{{ part.text or part.chord }}{% endfor %}
+                                </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                        </table>
+                        {% else %}
+                            {% for line in section.lines %}
+                            {% if line.special_style %}
+                                {# Комментарий со специальным стилем — класс section-reference #}
+                                <div class="section-reference {{ line.special_style }}">
+                                    {% for item in line.parts %}
+                                        {% if item.is_volta_group %}
+                                            {% if item.is_anchor %}
+                                                <span class="volta-flow">
+                                                    <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                                        <span class="volta-number">{{ item.number }}.</span>
+                                                        {% for part in item.parts %}
+                                                            <span class="chord-wrapper">
+                                                                {% if part.chord %}
+                                                                    <span class="chord{% if part.small_chord %} chord-small{% endif %}">
+                                                                        {% if index_chords and part.chord_extra %}
+                                                                            {% set parts = part.chord_base.split('/') %}
+                                                                            {% if parts|length == 2 %}
+                                                                                {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                            {% else %}
+                                                                                {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                            {% endif %}
+                                                                        {% else %}
+                                                                            {{ part.chord }}
+                                                                        {% endif %}
+                                                                    </span>
+                                                                {% endif %}
+                                                                <span class="lyrics">{{ part.text }}</span>
+                                                            </span>
+                                                        {% endfor %}
+                                                    </span>
+
+                                                    {% if item.floating_siblings %}
+                                                        <span class="volta-stack">
+                                                            {% for sib in item.floating_siblings %}
+                                                                <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                                    <span class="volta-number">{{ sib.number }}.</span>
+                                                                    {% for sp in sib.parts %}
+                                                                        {% if sp.chord %}
+                                                                            <span class="chord-wrapper">
+                                                                                <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
+                                                                                    {% if index_chords and sp.chord_extra %}
+                                                                                        {% set parts = sp.chord_base.split('/') %}
+                                                                                        {% if parts|length == 2 %}
+                                                                                            {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                                        {% else %}
+                                                                                            {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                                        {% endif %}
+                                                                                    {% else %}
+                                                                                        {{ sp.chord }}
+                                                                                    {% endif %}
+                                                                                </span>
+                                                                            </span>
+                                                                        {% endif %}
+                                                                    {% endfor %}
+                                                                </span>
+                                                            {% endfor %}
+                                                        </span>
+                                                    {% endif %}
+                                                </span>
+                                            {% elif item.is_floating %}
+                                                {# Плавающая volta на исходной позиции — только текст #}
+                                                {% for part in item.parts %}
+                                                    <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
+                                                {% endfor %}
+                                            {% else %}
+                                                {# Самостоятельная volta на своей позиции #}
+                                                <span class="volta-span volta-{{ item.number | replace('.', '-') }} standalone">
+                                                    <span class="volta-number">{{ item.number }}.</span>
+                                                    {% for part in item.parts %}
+                                                        <span class="chord-wrapper">
+                                                            {% if part.chord %}
+                                                                <span class="chord{% if loop.first %} standalone-head-chord{% endif %}{% if part.small_chord %} chord-small{% endif %}">
+                                                                    {% if index_chords and part.chord_extra %}
+                                                                        {% set parts = part.chord_base.split('/') %}
+                                                                        {% if parts|length == 2 %}
+                                                                            {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                        {% else %}
+                                                                            {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                        {% endif %}
+                                                                    {% else %}
+                                                                        {{ part.chord }}
+                                                                    {% endif %}
+                                                                </span>
+                                                            {% endif %}
+                                                            <span class="lyrics">{{ part.text }}</span>
+                                                        </span>
+                                                    {% endfor %}
+                                                </span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="chord-wrapper">
+                                                {% if item.chord %}
+                                                    <span class="chord{% if item.small_chord %} chord-small{% endif %}">
+                                                        {% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}
+                                                        {% if index_chords and item.chord_extra %}
+                                                            {% set parts = item.chord_base.split('/') %}
+                                                            {% if parts|length == 2 %}
+                                                                {{ parts[0] }}<span class="chord-index">{{ item.chord_extra }}</span>/{{ parts[1] }}
+                                                            {% else %}
+                                                                {{ item.chord_base }}<span class="chord-index">{{ item.chord_extra }}</span>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            {{ item.chord }}
+                                                        {% endif %}
+                                                    </span>
+                                                {% endif %}
+                                                <span class="lyrics">{{ item.text }}</span>
+                                            </span>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% for item in line.parts %}
+                                        {% if item.is_volta_group and item.is_anchor and item.floating_siblings %}
+                                            <span class="volta-stack-spacer" aria-hidden="true">
+                                                {% for sib in item.floating_siblings %}
+                                                    <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                        <span class="volta-number">{{ sib.number }}.</span>
+                                                        {% for sp in sib.parts %}
+                                                            {% if sp.chord %}
+                                                                <span class="chord-wrapper">
+                                                                    <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
+                                                                        {% if index_chords and sp.chord_extra %}
+                                                                            {% set parts = sp.chord_base.split('/') %}
+                                                                            {% if parts|length == 2 %}
+                                                                                {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                            {% else %}
+                                                                                {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                            {% endif %}
+                                                                        {% else %}
+                                                                            {{ sp.chord }}
+                                                                        {% endif %}
+                                                                    </span>
+                                                                </span>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </span>
+                                                {% endfor %}
+                                            </span>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                {# Обычная строка или комментарий без специального стиля #}
+                                <div class="line {% if line.is_comment %}comment{% endif %}">
+                            {% for item in line.parts %}
+                                {% if item.is_volta_group %}
+                                    {% if item.is_anchor %}
+                                        <span class="volta-flow">
+                                            <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
+                                                <span class="volta-number">{{ item.number }}.</span>
+                                                {% for part in item.parts %}
+                                                    <span class="chord-wrapper">
+                                                        {% if part.chord %}
+                                                            <span class="chord{% if part.small_chord %} chord-small{% endif %}">
+                                                                {% if index_chords and part.chord_extra %}
+                                                                    {% set parts = part.chord_base.split('/') %}
+                                                                    {% if parts|length == 2 %}
+                                                                        {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                    {% else %}
+                                                                        {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                    {% endif %}
+                                                                {% else %}
+                                                                    {{ part.chord }}
+                                                                {% endif %}
+                                                            </span>
+                                                        {% endif %}
+                                                        <span class="lyrics">{{ part.text }}</span>
+                                                    </span>
+                                                {% endfor %}
+                                            </span>
+
+                                            {% if item.floating_siblings %}
+                                                <span class="volta-stack">
+                                                    {% for sib in item.floating_siblings %}
+                                                        <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                            <span class="volta-number">{{ sib.number }}.</span>
+                                                            {% for sp in sib.parts %}
+                                                                {% if sp.chord %}
+                                                                    <span class="chord-wrapper">
+                                                                        <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
+                                                                            {% if index_chords and sp.chord_extra %}
+                                                                                {% set parts = sp.chord_base.split('/') %}
+                                                                                {% if parts|length == 2 %}
+                                                                                    {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                                {% else %}
+                                                                                    {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                                {% endif %}
+                                                                            {% else %}
+                                                                                {{ sp.chord }}
+                                                                            {% endif %}
+                                                                        </span>
+                                                                    </span>
+                                                                {% endif %}
+                                                            {% endfor %}
+                                                        </span>
+                                                    {% endfor %}
+                                                </span>
+                                            {% endif %}
+                                        </span>
+                                    {% elif item.is_floating %}
+                                        {# Плавающая volta на исходной позиции — только текст #}
+                                        {% for part in item.parts %}
+                                            <span class="chord-wrapper"><span class="lyrics">{{ part.text }}</span></span>
+                                        {% endfor %}
+                                    {% else %}
+                                        {# Самостоятельная volta на своей позиции #}
+                                        <span class="volta-span volta-{{ item.number | replace('.', '-') }} standalone">
+                                            <span class="volta-number">{{ item.number }}.</span>
+                                            {% for part in item.parts %}
+                                                <span class="chord-wrapper">
+                                                    {% if part.chord %}
+                                                        <span class="chord{% if loop.first %} standalone-head-chord{% endif %}{% if part.small_chord %} chord-small{% endif %}">
+                                                            {% if index_chords and part.chord_extra %}
+                                                                {% set parts = part.chord_base.split('/') %}
+                                                                {% if parts|length == 2 %}
+                                                                    {{ parts[0] }}<span class="chord-index">{{ part.chord_extra }}</span>/{{ parts[1] }}
+                                                                {% else %}
+                                                                    {{ part.chord_base }}<span class="chord-index">{{ part.chord_extra }}</span>
+                                                                {% endif %}
+                                                            {% else %}
+                                                                {{ part.chord }}
+                                                            {% endif %}
+                                                        </span>
+                                                    {% endif %}
+                                                    <span class="lyrics">{{ part.text }}</span>
+                                                </span>
+                                            {% endfor %}
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="chord-wrapper">
+                                        {% if item.chord %}
+                                            <span class="chord{% if item.small_chord %} chord-small{% endif %}">
+                                                {% if item.volta %}<span class="grid-volta">{{ item.volta }}</span>{% endif %}
+                                                {% if index_chords and item.chord_extra %}
+                                                    {% set parts = item.chord_base.split('/') %}
+                                                    {% if parts|length == 2 %}
+                                                        {{ parts[0] }}<span class="chord-index">{{ item.chord_extra }}</span>/{{ parts[1] }}
+                                                    {% else %}
+                                                        {{ item.chord_base }}<span class="chord-index">{{ item.chord_extra }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    {{ item.chord }}
+                                                {% endif %}
+                                            </span>
+                                        {% endif %}
+                                        <span class="lyrics">{{ item.text }}</span>
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                            {% for item in line.parts %}
+                                {% if item.is_volta_group and item.is_anchor and item.floating_siblings %}
+                                    <span class="volta-stack-spacer" aria-hidden="true">
+                                        {% for sib in item.floating_siblings %}
+                                            <span class="volta-span volta-{{ sib.number | replace('.', '-') }} in-stack">
+                                                <span class="volta-number">{{ sib.number }}.</span>
+                                                {% for sp in sib.parts %}
+                                                    {% if sp.chord %}
+                                                        <span class="chord-wrapper">
+                                                            <span class="chord{% if sp.small_chord %} chord-small{% endif %}">
+                                                                {% if index_chords and sp.chord_extra %}
+                                                                    {% set parts = sp.chord_base.split('/') %}
+                                                                    {% if parts|length == 2 %}
+                                                                        {{ parts[0] }}<span class="chord-index">{{ sp.chord_extra }}</span>/{{ parts[1] }}
+                                                                    {% else %}
+                                                                        {{ sp.chord_base }}<span class="chord-index">{{ sp.chord_extra }}</span>
+                                                                    {% endif %}
+                                                                {% else %}
+                                                                    {{ sp.chord }}
+                                                                {% endif %}
+                                                            </span>
+                                                        </span>
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </span>
+                                        {% endfor %}
+                                    </span>
+                                {% endif %}
+                            {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
