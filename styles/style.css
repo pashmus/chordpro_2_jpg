@@ -589,7 +589,7 @@ body {
 /* Для самостоятельной volta:
    скобка должна ограничиваться шириной аккорда, а не всего слова. */
 .volta-span.standalone::before {
-    display: none;
+    display: block;
 }
 .volta-span.standalone .chord-wrapper {
     align-items: flex-start;
@@ -599,18 +599,7 @@ body {
     z-index: 1;
 }
 .volta-span.standalone .standalone-head-chord::before {
-    content: "";
-    position: absolute;
-    top: -2px;
-    left: -13px;
-    right: 0;
-    height: 12px;
-    border: 2px solid;
-    border-color: var(--volta-color, #7f8c8d);
-    border-bottom: 0;
-    border-width: 2px 2px 0 2px;
-    pointer-events: none;
-    z-index: 0;
+    display: none;
 }
 .volta-number {
     position: absolute;
@@ -630,6 +619,7 @@ body {
 .volta-2 { --volta-color: #8e44ad; }
 .volta-3 { --volta-color: #27ae60; }
 .volta-flow {
+    position: relative;
     display: inline-flex;
     align-items: flex-start;
     white-space: nowrap;
@@ -640,16 +630,16 @@ body {
 
 /* Стек voltas для каскада (2-я, 3-я volta) */
 .volta-stack {
-    /* Держим вторую/третью вольту в потоке строки,
-       чтобы ширина контейнера учитывала их содержимое. */
-    position: static;
-    display: inline-flex;
-    align-items: flex-start;
+    position: absolute;
+    left: 100%;
+    top: 0;
+    display: flex;
     white-space: nowrap;
     z-index: 10;
     /* margin-left для компенсации отрицательных смещений и зазора между соседями */
     margin-left: 15px;
 }
+
 
 /* У voltas в стеке — свои скобки и номера */
 .volta-span.in-stack {
@@ -659,5 +649,17 @@ body {
 
 .volta-span.in-stack:last-child {
     margin-right: 0;
+}
+
+/* Невидимый компенсатор ширины для абсолютного volta-stack */
+.volta-stack-spacer {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    line-height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    flex: 0 0 auto;
 }
 

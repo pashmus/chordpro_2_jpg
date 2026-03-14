@@ -138,7 +138,7 @@
                                     {% for item in line.parts %}
                                         {% if item.is_volta_group %}
                                             {% if item.is_anchor %}
-                                                <span class="volta-flow">
+                                                <span class="volta-flow" data-volta-anchor>
                                                     <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
                                                         <span class="volta-number">{{ item.number }}.</span>
                                                         {% for part in item.parts %}
@@ -241,6 +241,11 @@
                                             </span>
                                         {% endif %}
                                     {% endfor %}
+                                    {% for item in line.parts %}
+                                        {% if item.is_volta_group and item.is_anchor and item.floating_siblings %}
+                                            <span class="volta-stack-spacer" data-volta-spacer aria-hidden="true"></span>
+                                        {% endif %}
+                                    {% endfor %}
                                 </div>
                             {% else %}
                                 {# Обычная строка или комментарий без специального стиля #}
@@ -248,7 +253,7 @@
                             {% for item in line.parts %}
                                 {% if item.is_volta_group %}
                                     {% if item.is_anchor %}
-                                        <span class="volta-flow">
+                                        <span class="volta-flow" data-volta-anchor>
                                             <span class="volta-span volta-{{ item.number | replace('.', '-') }}">
                                                 <span class="volta-number">{{ item.number }}.</span>
                                                 {% for part in item.parts %}
@@ -349,6 +354,11 @@
                                         {% endif %}
                                         <span class="lyrics">{{ item.text }}</span>
                                     </span>
+                                {% endif %}
+                            {% endfor %}
+                            {% for item in line.parts %}
+                                {% if item.is_volta_group and item.is_anchor and item.floating_siblings %}
+                                    <span class="volta-stack-spacer" data-volta-spacer aria-hidden="true"></span>
                                 {% endif %}
                             {% endfor %}
                                 </div>

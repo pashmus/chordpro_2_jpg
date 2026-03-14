@@ -800,6 +800,84 @@ def render_song_to_files(
     # Небольшая пауза для стабилизации вёрстки (для локального статического обычно мгновенно)
     # page.wait_for_timeout(100)
 
+    # Компенсация горизонтального вылета абсолютных volta-stack через
+    # невидимые spacers в конце строки (без изменения padding секций).
+    overflow_result = page.evaluate(
+        """
+        () => {
+            const lines = Array.from(
+                document.querySelectorAll('.song-container .line, .song-container .section-reference')
+            );
+            let adjustedSpacers = 0;
+            let maxOverflowApplied = 0;
+
+            for (const line of lines) {
+                const lineRect = line.getBoundingClientRect();
+                if (!lineRect.width) continue;
+
+                // Правая граница фактического контента строки, а не всей
+                // растянутой flex-строки. Это важно для корректного overflow.
+                let contentRight = lineRect.left;
+                for (const child of line.children) {
+                    if (
+                        child.classList &&
+                        child.classList.contains('volta-stack-spacer')
+                    ) {
+                        continue;
+                    }
+                    const childStyle = window.getComputedStyle(child);
+                    if (childStyle.position === 'absolute') {
+                        continue;
+                    }
+                    const childRect = child.getBoundingClientRect();
+                    if (childRect.right > contentRight) {
+                        contentRight = childRect.right;
+                    }
+                }
+
+                const anchors = line.querySelectorAll('[data-volta-anchor]');
+                const spacers = line.querySelectorAll('[data-volta-spacer]');
+                if (!anchors.length || !spacers.length) continue;
+
+                // Сброс перед расчётом
+                for (const spacer of spacers) {
+                    spacer.style.width = '0px';
+                }
+
+                const pairCount = Math.min(anchors.length, spacers.length);
+                for (let i = 0; i < pairCount; i++) {
+                    const anchor = anchors[i];
+                    const spacer = spacers[i];
+                    const stack = anchor.querySelector('.volta-stack');
+                    if (!stack) continue;
+
+                    const stackRect = stack.getBoundingClientRect();
+                    const overflow = Math.ceil(stackRect.right - contentRight);
+                    if (overflow > 0) {
+                        const applied = overflow + 2;
+                        spacer.style.width = `${applied}px`;
+                        adjustedSpacers += 1;
+                        if (applied > maxOverflowApplied) {
+                            maxOverflowApplied = applied;
+                        }
+                    }
+                }
+            }
+
+            return {
+                max_overflow: maxOverflowApplied,
+                spacers: adjustedSpacers
+            };
+        }
+        """
+    )
+    if overflow_result and overflow_result.get("max_overflow", 0):
+        print(
+            "Applied volta overflow compensation: "
+            f"+{overflow_result['max_overflow']}px "
+            f"on {overflow_result.get('spacers', 0)} spacer(s)"
+        )
+
     output_filename = os.path.splitext(filename)[0] + ".jpg"
     output_path = os.path.join(OUTPUT_DIR, output_filename)
 
