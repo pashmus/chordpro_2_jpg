@@ -453,6 +453,11 @@ body {
     flex-shrink: 0;
 }
 
+/* Выравнивание метки по первой строке в секциях без аккордов. */
+.layout-sidebar .section.no-chords .section-label {
+    margin-top: 10px;
+}
+
 /* Общий стиль для всех секций */
 .layout-sidebar .section-content {
     padding-top: 2px;
