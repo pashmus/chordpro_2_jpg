@@ -779,68 +779,96 @@ def build_sections_data(song, index_chords=False):
     return sections_data
 
 
-def build_context(song, layout, input_ger=False, index_chords=False):
-    display_key = song.key
-    if song.key and song.capo:
+def build_context(song, layout, input_ger=False, output_ger=False, index_chords=False):
+    def normalize_key_root_for_pychord(note, is_german_notation):
+        if not note:
+            return note
+        s = note
+        if is_german_notation:
+            # German notation: H -> B, B -> Bb
+            temp = "###TEMP###"
+            s = s.replace("H", temp)
+            s = s.replace("B", "Bb")
+            s = s.replace(temp, "B")
+        else:
+            # Standard notation: если вдруг встретится H, привести к B
+            s = s.replace("H", "B")
+        return s
+
+    def format_note_to_german(note):
+        if not note:
+            return note
+        temp = "###TEMP###"
+        s = note.replace("Bb", temp)
+        s = s.replace("B", "H")
+        s = s.replace(temp, "B")
+        return s
+
+    def format_key_for_header(base_key, source_key=None):
+        if not base_key:
+            return ""
+
+        source_label = source_key if source_key else base_key
+
         try:
-            capo_val = int(song.capo)
-            if capo_val != 0:
-                # Извлекаем корень и качество ключа (Dm -> ("D", "m"))
-                key_root_raw, key_quality_raw = song.extract_root_note(song.key)
-                if key_root_raw:
-                    key_quality_raw = (key_quality_raw or "").strip()
-
-                    # Минорный ли это ключ
-                    is_minor = (
-                        key_quality_raw
-                        and key_quality_raw.lower().startswith("m")
-                        and not key_quality_raw.lower().startswith("maj")
-                    )
-
-                    # Полная нормализация H/B (как в song.py)
-                    def normalize_key_root_for_pychord(note, is_german_input):
-                        if not note:
-                            return note
-                        s = note
-                        if is_german_input:
-                            # German Input: H -> B, B -> Bb
-                            temp = "###TEMP###"
-                            s = s.replace("H", temp)
-                            s = s.replace("B", "Bb")
-                            s = s.replace(temp, "B")
-                        else:
-                            # Standard Input: H -> B
-                            s = s.replace("H", "B")
-                        return s
-
-                    # Используем переданный input_ger для нормализации
-                    key_root_eng = normalize_key_root_for_pychord(key_root_raw, input_ger)
-
-                    try:
-                        # 1. Старый scale (relative major для минора, root для мажора)
-                        if is_minor:
-                            old_scale_root_eng = song._get_relative_major_root(key_root_eng)
-                        else:
-                            old_scale_root_eng = key_root_eng
-
-                        # 2. Транспонируем scale численно и нормализуем
-                        old_scale_val = note_to_val(old_scale_root_eng)
-                        new_scale_val = (old_scale_val + capo_val) % 12
-                        new_scale_root_eng = song._normalize_key_root_from_val(new_scale_val)
-
-                        # 3. Транспонируем корень ключа в системе нового scale
-                        key_root_val = note_to_val(key_root_eng)
-                        new_key_root_val = (key_root_val + capo_val) % 12
-                        sounding_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
-
-                        # 4. Формируем отображаемый ключ
-                        sounding_key = sounding_root_eng + ("m" if is_minor else "")
-                        display_key = f"{sounding_key}({song.key})"
-                    except Exception:
-                        pass
+            capo_val = int(song.capo) if song.capo is not None else 0
         except Exception:
-            # Игнорируем ошибки (некорректный capo, сложная тональность и т.д.)
-            pass
+            capo_val = 0
+
+        if capo_val == 0:
+            return base_key
+
+        key_root_raw, key_quality_raw = song.extract_root_note(base_key)
+        if not key_root_raw:
+            return base_key
+
+        key_quality_raw = (key_quality_raw or "").strip()
+        is_minor = (
+            key_quality_raw
+            and key_quality_raw.lower().startswith("m")
+            and not key_quality_raw.lower().startswith("maj")
+        )
+
+        key_root_eng = normalize_key_root_for_pychord(
+            key_root_raw, is_german_notation=output_ger
+        )
+
+        try:
+            if is_minor:
+                old_scale_root_eng = song._get_relative_major_root(key_root_eng)
+            else:
+                old_scale_root_eng = key_root_eng
+
+            old_scale_val = note_to_val(old_scale_root_eng)
+            new_scale_val = (old_scale_val + capo_val) % 12
+            new_scale_root_eng = song._normalize_key_root_from_val(new_scale_val)
+
+            key_root_val = note_to_val(key_root_eng)
+            new_key_root_val = (key_root_val + capo_val) % 12
+            sounding_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
+            if output_ger:
+                sounding_root = format_note_to_german(sounding_root_eng)
+            else:
+                sounding_root = sounding_root_eng
+
+            sounding_key = sounding_root + ("m" if is_minor else "")
+            return f"{sounding_key}({source_label})"
+        except Exception:
+            return base_key
+
+    display_key = song.key
+    modulation_keys = getattr(song, "modulation_keys", None) or []
+    if modulation_keys:
+        display_key = " -> ".join(
+            format_key_for_header(
+                item.get("display_key", ""),
+                source_key=item.get("source_key", item.get("display_key", "")),
+            )
+            for item in modulation_keys
+            if item.get("display_key")
+        )
+    else:
+        display_key = format_key_for_header(song.key, source_key=song.key)
 
     return {
         "title": song.title,
@@ -855,9 +883,15 @@ def build_context(song, layout, input_ger=False, index_chords=False):
     }
 
 
-def render_song_to_html(song, template, layout, input_ger=False, index_chords=False):
+def render_song_to_html(
+    song, template, layout, input_ger=False, output_ger=False, index_chords=False
+):
     context = build_context(
-        song, layout, input_ger=input_ger, index_chords=index_chords
+        song,
+        layout,
+        input_ger=input_ger,
+        output_ger=output_ger,
+        index_chords=index_chords,
     )
     return template.render(context)
 
@@ -911,11 +945,23 @@ def apply_transforms(song, args):
 
 
 def render_song_to_files(
-    filename, song, template, browser, layout, input_ger=False, index_chords=False
+    filename,
+    song,
+    template,
+    browser,
+    layout,
+    input_ger=False,
+    output_ger=False,
+    index_chords=False,
 ):
     try:
         html_content = render_song_to_html(
-            song, template, layout, input_ger=input_ger, index_chords=index_chords
+            song,
+            template,
+            layout,
+            input_ger=input_ger,
+            output_ger=output_ger,
+            index_chords=index_chords,
         )
     except Exception as e:
         LOGGER.error(f"Ошибка рендера HTML для '{filename}': {e}")
@@ -1197,6 +1243,7 @@ def render_songs_from_folder(args):
                         browser,
                         args.layout,
                         input_ger=args.in_ger,
+                        output_ger=args.out_ger,
                         index_chords=args.small_extensions,
                     )
                 except Exception:
@@ -1264,6 +1311,7 @@ def render_songs_from_db(args):
                         browser,
                         args.layout,
                         input_ger=args.in_ger,
+                        output_ger=args.out_ger,
                         index_chords=args.small_extensions,
                     )
                 except Exception:

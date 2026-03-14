@@ -27,6 +27,7 @@ class Song:
         self.capo = ""
         self.metadata = {}
         self.sections = []
+        self.modulation_keys = []
 
     def _get_section_type(self, text):
         """
@@ -415,22 +416,6 @@ class Song:
         """
         # Выполняем и при semitones == 0 для нормализации нотации.
 
-        # Исходная тональность: извлечь корень и «хвост» (качество), напр. "Dm" -> ("D", "m")
-        current_key = self.key if self.key else "C"
-        key_root_raw, key_quality_raw = self.extract_root_note(current_key)
-        if not key_root_raw:
-            key_root_raw = "C"
-            key_quality_raw = ""
-
-        key_quality_raw = (key_quality_raw or "").strip()
-
-        # Минорный ли это ключ (Dm, Dmin и т.п.)
-        is_minor = (
-            key_quality_raw
-            and key_quality_raw.lower().startswith("m")
-            and not key_quality_raw.lower().startswith("maj")
-        )
-
         # Нормализуем корень тональности для pychord (H/B -> английская нотация)
         def normalize_key_root_for_pychord(note, is_german_input):
             if not note:
@@ -447,50 +432,79 @@ class Song:
                 s = s.replace("H", "B")
             return s
 
-        key_root_eng = normalize_key_root_for_pychord(key_root_raw, input_ger)
-
-        # 1. Выбираем старый scale для транспонирования ключа
-        try:
-            if is_minor:
-                old_scale_root_eng = self._get_relative_major_root(key_root_eng)
-            else:
-                old_scale_root_eng = key_root_eng
-        except Exception:
-            old_scale_root_eng = key_root_eng
-
-        # 2. Транспонируем scale (relative major / root) численно и нормализуем имя
-        try:
-            old_scale_val = note_to_val(old_scale_root_eng)
-            new_scale_val = (old_scale_val + semitones) % 12
-            new_scale_root_eng = self._normalize_key_root_from_val(new_scale_val)
-        except Exception:
-            new_scale_root_eng = old_scale_root_eng
-
-        # 3. Транспонируем сам корень ключа в системе НОВОГО scale
-        try:
-            key_root_val = note_to_val(key_root_eng)
-            new_key_root_val = (key_root_val + semitones) % 12
-            new_key_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
-        except Exception:
-            new_key_root_eng = key_root_eng
-
-        # 4. Этот же new_scale_root_eng используем как scale для аккордов
-        chord_scale_root = new_scale_root_eng
-
-        # Отображаемый корень тональности в нужной нотации (германской или стандартной)
-        if output_std:
-            new_key_root_display = new_key_root_eng
-        else:
+        def _to_output_notation(note_eng):
+            if output_std:
+                return note_eng
             temp = "###TEMP###"
-            s = new_key_root_eng.replace("Bb", temp)
+            s = note_eng.replace("Bb", temp)
             s = s.replace("B", "H")
             s = s.replace(temp, "B")
-            new_key_root_display = s
+            return s
+
+        def _is_minor_quality(quality_text):
+            q = (quality_text or "").strip().lower()
+            return q.startswith("m") and not q.startswith("maj")
+
+        def _build_key_info(source_key_raw):
+            source_key = str(source_key_raw or "").strip()
+            if not source_key:
+                return None
+
+            key_root_raw, key_quality_raw = self.extract_root_note(source_key)
+            if not key_root_raw:
+                return None
+
+            is_minor = _is_minor_quality(key_quality_raw)
+            key_root_eng = normalize_key_root_for_pychord(key_root_raw, input_ger)
+
+            try:
+                if is_minor:
+                    old_scale_root_eng = self._get_relative_major_root(key_root_eng)
+                else:
+                    old_scale_root_eng = key_root_eng
+            except Exception:
+                old_scale_root_eng = key_root_eng
+
+            try:
+                old_scale_val = note_to_val(old_scale_root_eng)
+                new_scale_val = (old_scale_val + semitones) % 12
+                new_scale_root_eng = self._normalize_key_root_from_val(new_scale_val)
+            except Exception:
+                new_scale_root_eng = old_scale_root_eng
+
+            try:
+                key_root_val = note_to_val(key_root_eng)
+                new_key_root_val = (key_root_val + semitones) % 12
+                new_key_root_eng = val_to_note(new_key_root_val, new_scale_root_eng)
+            except Exception:
+                new_key_root_eng = key_root_eng
+
+            new_key_root_display = _to_output_notation(new_key_root_eng)
+            display_key = new_key_root_display + ("m" if is_minor else "")
+
+            return {
+                "source_key": source_key,
+                "display_key": display_key,
+                "scale_root": new_scale_root_eng,
+            }
 
         # Ключ всегда в нормализованном виде:
         # - минор: "Dm"
         # - мажор: "D"
-        self.key = new_key_root_display + ("m" if is_minor else "")
+        initial_source_key = self.key if self.key else "C"
+        initial_key_info = _build_key_info(initial_source_key) or {
+            "source_key": "C",
+            "display_key": "C",
+            "scale_root": "C",
+        }
+        self.key = initial_key_info["display_key"]
+        chord_scale_root = initial_key_info["scale_root"]
+        self.modulation_keys = [
+            {
+                "source_key": initial_key_info["source_key"],
+                "display_key": initial_key_info["display_key"],
+            }
+        ]
 
         def collect_parts(items):
             """Рекурсивно собрать Part из списка (Part или VoltaGroup)."""
@@ -505,6 +519,31 @@ class Song:
         # Перебор всех секций и строк
         for section in self.sections:
             for line in section.lines:
+                # Локальная модуляция через комментарий вида: {comment: key: D}
+                # Пример: key: D, key: Bb, key: F#m, key: Hm
+                if getattr(line, "is_comment", False):
+                    comment_text = "".join(
+                        (getattr(p, "text", "") or "") for p in getattr(line, "parts", [])
+                    ).strip()
+                    marker_match = re.match(r"(?i)^key\s*:\s*(.+?)\s*$", comment_text)
+                    if marker_match:
+                        modulation_source_key = marker_match.group(1).strip()
+                        modulation_info = _build_key_info(modulation_source_key)
+                        if modulation_info:
+                            chord_scale_root = modulation_info["scale_root"]
+                            last_mod = self.modulation_keys[-1] if self.modulation_keys else None
+                            if (
+                                not last_mod
+                                or last_mod.get("display_key") != modulation_info["display_key"]
+                                or last_mod.get("source_key") != modulation_info["source_key"]
+                            ):
+                                self.modulation_keys.append(
+                                    {
+                                        "source_key": modulation_info["source_key"],
+                                        "display_key": modulation_info["display_key"],
+                                    }
+                                )
+
                 # 1. Обычные Part (развернуть структуру для обхода)
                 all_parts = collect_parts(line.parts)
 
