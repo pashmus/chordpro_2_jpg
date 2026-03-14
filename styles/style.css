@@ -277,6 +277,13 @@ body {
     align-items: flex-end;
 }
 
+/* Пустая строка внутри секции (перенос из исходного .cho). */
+.line.blank-line {
+    display: block;
+    height: 12px;
+    margin: 0;
+}
+
 /* Для секций без аккордов увеличиваем вертикальное дыхание текста. */
 .section.no-chords .line {
     margin-bottom: 3px;

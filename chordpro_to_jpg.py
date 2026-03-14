@@ -488,6 +488,17 @@ def build_sections_data(song, index_chords=False):
                 offset_label = True
 
         for line in sec.lines:
+            if getattr(line, "is_blank", False):
+                lines_data.append(
+                    {
+                        "parts": [],
+                        "is_comment": False,
+                        "special_style": None,
+                        "is_blank": True,
+                    }
+                )
+                continue
+
             if sec.type == "grid" and hasattr(line, "grid_cells") and line.grid_cells:
                 cells_data = []
                 for cell in line.grid_cells:
@@ -570,7 +581,9 @@ def build_sections_data(song, index_chords=False):
 
                     cells_data.append(current_cell_data)
 
-                lines_data.append({"grid_cells": cells_data, "is_comment": False})
+                lines_data.append(
+                    {"grid_cells": cells_data, "is_comment": False, "is_blank": False}
+                )
             else:
                 # Определение хвостовых аккордов:
                 # - на верхнем уровне строки
@@ -713,6 +726,7 @@ def build_sections_data(song, index_chords=False):
                         "parts": parts_data,
                         "is_comment": is_comment,
                         "special_style": line_special_style,
+                        "is_blank": False,
                     }
                 )
 

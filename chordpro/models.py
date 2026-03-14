@@ -6,10 +6,11 @@ class Section:
 
 
 class Line:
-    def __init__(self, is_comment=False):
+    def __init__(self, is_comment=False, is_blank=False):
         self.parts = []
         self.grid_cells = []  # For grid sections
         self.is_comment = is_comment
+        self.is_blank = is_blank
 
 
 class GridCell:

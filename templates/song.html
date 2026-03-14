@@ -132,7 +132,9 @@
                         </table>
                         {% else %}
                             {% for line in section.lines %}
-                            {% if line.special_style %}
+                            {% if line.is_blank %}
+                                <div class="line blank-line" aria-hidden="true"></div>
+                            {% elif line.special_style %}
                                 {# Комментарий со специальным стилем — класс section-reference #}
                                 <div class="section-reference {{ line.special_style }}">
                                     {% for item in line.parts %}

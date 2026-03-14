@@ -18,6 +18,10 @@ class ChordProParser:
             clean_line = line.strip()
 
             if not clean_line:
+                # Сохраняем пустые строки внутри активной секции
+                # как отдельные элементы, чтобы не схлопывать переносы.
+                if current_section is not None and current_section.type != "grid":
+                    current_section.lines.append(Line(is_blank=True))
                 continue
 
             # Директивы
