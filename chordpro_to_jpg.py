@@ -9,7 +9,10 @@ import psycopg2
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup, escape
-from chordpro import ChordProParser
+try:
+    from .chordpro import ChordProParser
+except ImportError:
+    from chordpro import ChordProParser
 from pychord.utils import transpose_note, note_to_val, val_to_note
 
 # Конфигурация

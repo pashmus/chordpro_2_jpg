@@ -3,6 +3,7 @@
 """
 
 import argparse
+from importlib import import_module
 from dataclasses import dataclass
 
 
@@ -61,10 +62,10 @@ def render_chordpro_to_jpg(
     if layout not in ("standard", "sidebar"):
         raise ValueError("layout должен быть 'standard' или 'sidebar'.")
 
-    try:
-        from . import chordpro_to_jpg as core
-    except ImportError:
-        import chordpro_to_jpg as core
+    print(f"[CHORDPRO_DEBUG] API render_chordpro_to_jpg: start filename_stem={filename_stem}, "
+          f"transpose={transpose}, layout={layout}, small_extensions={small_extensions}")
+
+    core = import_module("chordpro_2_jpg.chordpro_to_jpg")
 
     parser = core.ChordProParser()
     template_dir = core._resolve_local_dir(core.TEMPLATE_DIR)
@@ -75,6 +76,7 @@ def render_chordpro_to_jpg(
         song = parser.parse(chordpro_text)
     except Exception as e:
         core.LOGGER.error(f"Ошибка разбора ChordPro в библиотечном режиме: {e}")
+        print(f"[CHORDPRO_DEBUG] API render_chordpro_to_jpg: parse ERROR {repr(e)}")
         raise
 
     params = RenderParams(
@@ -92,13 +94,15 @@ def render_chordpro_to_jpg(
         core.apply_transforms(song, args)
     except Exception as e:
         core.LOGGER.error(f"Ошибка применения трансформаций в библиотечном режиме: {e}")
+        print(f"[CHORDPRO_DEBUG] API render_chordpro_to_jpg: transform ERROR {repr(e)}")
         raise
 
     safe_stem = core._sanitize_filename_stem(filename_stem)
+    print(f"[CHORDPRO_DEBUG] API render_chordpro_to_jpg: render safe_stem={safe_stem}, out_dir={resolved_output_dir}")
     with core.sync_playwright() as p:
         browser = p.chromium.launch()
         try:
-            return core.render_song_to_files(
+            jpg_path = core.render_song_to_files(
                 safe_stem,
                 song,
                 template,
@@ -109,6 +113,8 @@ def render_chordpro_to_jpg(
                 index_chords=small_extensions,
                 output_dir=resolved_output_dir,
             )
+            print(f"[CHORDPRO_DEBUG] API render_chordpro_to_jpg: done jpg_path={jpg_path}")
+            return jpg_path
         finally:
             browser.close()
 
