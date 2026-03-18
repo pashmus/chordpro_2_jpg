@@ -824,10 +824,13 @@ def build_context(song, layout, input_ger=False, output_ger=False, index_chords=
     display_key = song.key
     modulation_keys = getattr(song, "modulation_keys", None) or []
     if modulation_keys:
+        # Для модуляций правая часть в скобках должна совпадать с тем же ключом,
+        # который используется как base_key для вычисления левой части (учет capo).
+        # В modulation_keys этот ключ хранится в display_key.
         display_key = " -> ".join(
             format_key_for_header(
                 item.get("display_key", ""),
-                source_key=item.get("source_key", item.get("display_key", "")),
+                source_key=item.get("display_key", ""),
             )
             for item in modulation_keys
             if item.get("display_key")
