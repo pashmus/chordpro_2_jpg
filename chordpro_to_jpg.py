@@ -3,6 +3,7 @@ import sys
 import argparse
 import logging
 from pathlib import Path
+from dataclasses import dataclass
 
 import psycopg2
 from playwright.sync_api import sync_playwright
@@ -210,6 +211,56 @@ def parse_args():
         ),
     )
     return cli_parser.parse_args()
+
+
+@dataclass
+class RenderParams:
+    """
+    Параметры рендера для библиотечного вызова.
+    Значения по умолчанию повторяют поведение CLI.
+    """
+    transpose: int = 0
+    capo: int = None
+    in_ger: bool = False
+    out_ger: bool = False
+    layout: str = "sidebar"
+    expand_chorus: bool = False
+    small_extensions: bool = False
+
+
+def _params_to_args(params: RenderParams):
+    """
+    Преобразует RenderParams в объект с CLI-совместимыми полями.
+    Это позволяет переиспользовать apply_transforms() без дублирования логики.
+    """
+    return argparse.Namespace(
+        transpose=params.transpose,
+        capo=params.capo,
+        in_ger=params.in_ger,
+        out_ger=params.out_ger,
+        layout=params.layout,
+        expand_chorus=params.expand_chorus,
+        small_extensions=params.small_extensions,
+        from_db=None,
+    )
+
+
+def _resolve_local_dir(dir_path):
+    """
+    Нормализует путь к директории:
+    - абсолютный путь оставляет как есть;
+    - относительный трактует относительно папки chordpro_2_jpg.
+    """
+    raw = str(dir_path).strip()
+    if os.path.isabs(raw):
+        return raw
+    return os.path.join(str(_CURRENT_DIR), raw)
+
+
+def _load_template(template_dir):
+    env = Environment(loader=FileSystemLoader(template_dir))
+    env.filters["chord_backslash"] = format_chord_backslashes
+    return env.get_template("song.html")
 
 
 def find_input_files(input_dir):
@@ -953,6 +1004,7 @@ def render_song_to_files(
     input_ger=False,
     output_ger=False,
     index_chords=False,
+    output_dir=OUTPUT_DIR,
 ):
     try:
         html_content = render_song_to_html(
@@ -968,7 +1020,8 @@ def render_song_to_files(
         raise
 
     # Сохранить временный HTML
-    temp_html_path = os.path.abspath(os.path.join(OUTPUT_DIR, f"{filename}.html"))
+    os.makedirs(output_dir, exist_ok=True)
+    temp_html_path = os.path.abspath(os.path.join(output_dir, f"{filename}.html"))
     try:
         with open(temp_html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
@@ -1050,19 +1103,20 @@ def render_song_to_files(
         )
 
         output_filename = os.path.splitext(filename)[0] + ".jpg"
-        output_path = os.path.join(OUTPUT_DIR, output_filename)
+        output_path = os.path.join(output_dir, output_filename)
 
         # Скриншот контейнера песни, чтобы убрать лишнее поле справа/снизу.
         locator = page.locator(".song-container")
         locator.screenshot(path=output_path, type="jpeg", quality=90)
     except Exception as e:
         output_filename = os.path.splitext(filename)[0] + ".jpg"
-        output_path = os.path.join(OUTPUT_DIR, output_filename)
+        output_path = os.path.join(output_dir, output_filename)
         LOGGER.error(f"Ошибка создания JPG '{output_path}': {e}")
         raise
     finally:
         if page is not None:
             page.close()
+    return output_path
 
 
 def _get_db_manager():
@@ -1183,25 +1237,107 @@ def _parse_song_numbers(tokens):
     return sorted(result)
 
 
+def _sanitize_filename_stem(stem):
+    """
+    Делает безопасную основу имени файла (без расширения).
+    """
+    unsafe_chars = '<>:"/\\|?*'
+    safe_stem = "".join("_" if c in unsafe_chars else c for c in str(stem))
+    safe_stem = safe_stem.strip().rstrip(".")
+    return safe_stem or "song"
+
+
+def render_chordpro_to_jpg(
+    chordpro_text,
+    filename_stem="song",
+    *,
+    transpose=0,
+    capo=None,
+    in_ger=False,
+    out_ger=False,
+    layout="sidebar",
+    expand_chorus=False,
+    small_extensions=False,
+    output_dir=OUTPUT_DIR,
+):
+    """
+    Публичный библиотечный API:
+    рендерит один ChordPro-текст в JPG и возвращает путь к JPG.
+    """
+    if not chordpro_text or not str(chordpro_text).strip():
+        raise ValueError("chordpro_text пустой: рендер невозможен.")
+
+    if layout not in ("standard", "sidebar"):
+        raise ValueError("layout должен быть 'standard' или 'sidebar'.")
+
+    parser = ChordProParser()
+    template_dir = _resolve_local_dir(TEMPLATE_DIR)
+    output_dir_resolved = _resolve_local_dir(output_dir)
+    template = _load_template(template_dir)
+
+    try:
+        song = parser.parse(chordpro_text)
+    except Exception as e:
+        LOGGER.error(f"Ошибка разбора ChordPro в библиотечном режиме: {e}")
+        raise
+
+    params = RenderParams(
+        transpose=transpose,
+        capo=capo,
+        in_ger=in_ger,
+        out_ger=out_ger,
+        layout=layout,
+        expand_chorus=expand_chorus,
+        small_extensions=small_extensions,
+    )
+    args = _params_to_args(params)
+
+    try:
+        apply_transforms(song, args)
+    except Exception as e:
+        LOGGER.error(f"Ошибка применения трансформаций в библиотечном режиме: {e}")
+        raise
+
+    safe_stem = _sanitize_filename_stem(filename_stem)
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            return render_song_to_files(
+                safe_stem,
+                song,
+                template,
+                browser,
+                layout,
+                input_ger=in_ger,
+                output_ger=out_ger,
+                index_chords=small_extensions,
+                output_dir=output_dir_resolved,
+            )
+        finally:
+            browser.close()
+
+
 def render_songs_from_folder(args):
     """
     Рендерит песни из файлов в папке INPUT_DIR (текущий стандартный режим).
     """
+    input_dir = _resolve_local_dir(INPUT_DIR)
+    output_dir = _resolve_local_dir(OUTPUT_DIR)
+    template_dir = _resolve_local_dir(TEMPLATE_DIR)
+
     # Создать выходную директорию при отсутствии
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     # Инициализация парсера и шаблона
     parser = ChordProParser()
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-    env.filters["chord_backslash"] = format_chord_backslashes
-    template = env.get_template("song.html")
+    template = _load_template(template_dir)
 
     # Поиск файлов
-    files = find_input_files(INPUT_DIR)
+    files = find_input_files(input_dir)
 
     if not files:
         LOGGER.warning(
-            f"Во входной директории '{INPUT_DIR}' не найдено файлов "
+            f"Во входной директории '{input_dir}' не найдено файлов "
             ".chordpro/.pro/.cho."
         )
         return
@@ -1211,7 +1347,7 @@ def render_songs_from_folder(args):
         browser = p.chromium.launch()
         try:
             for filename in files:
-                filepath = os.path.join(INPUT_DIR, filename)
+                filepath = os.path.join(input_dir, filename)
 
                 # Чтение и разбор
                 try:
@@ -1245,6 +1381,7 @@ def render_songs_from_folder(args):
                         input_ger=args.in_ger,
                         output_ger=args.out_ger,
                         index_chords=args.small_extensions,
+                        output_dir=output_dir,
                     )
                 except Exception:
                     continue
@@ -1263,18 +1400,19 @@ def render_songs_from_db(args):
         LOGGER.error("Не удалось разобрать номера песен для режима --from-db.")
         return
 
+    output_dir = _resolve_local_dir(OUTPUT_DIR)
+    template_dir = _resolve_local_dir(TEMPLATE_DIR)
+
     db_manager = _get_db_manager()
     if db_manager is None:
         return
 
     # Создать выходную директорию при отсутствии
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     # Инициализация парсера и шаблона
     parser = ChordProParser()
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
-    env.filters["chord_backslash"] = format_chord_backslashes
-    template = env.get_template("song.html")
+    template = _load_template(template_dir)
 
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -1313,6 +1451,7 @@ def render_songs_from_db(args):
                         input_ger=args.in_ger,
                         output_ger=args.out_ger,
                         index_chords=args.small_extensions,
+                        output_dir=output_dir,
                     )
                 except Exception:
                     continue
