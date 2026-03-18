@@ -135,114 +135,25 @@ def get_special_style(text):
 
 
 def parse_args():
-    cli_parser = argparse.ArgumentParser(
-        description="Convert ChordPro files to HTML/JPG images."
-    )
-    cli_parser.add_argument(
-        "--transpose", "-t", type=int, default=0, help="Transpose chords by N semitones"
-    )
-    cli_parser.add_argument(
-        "--capo",
-        "-capo",
-        type=int,
-        default=None,
-        help=(
-            "Set capo position for output metadata and compensate chords/key by capo semitones. "
-            "Values 2, +2 and -2 are treated identically."
-        ),
-    )
-    cli_parser.add_argument(
-        "-in-ger",
-        "--in-ger",
-        dest="in_ger",
-        action="store_true",
-        help=(
-            "German notation on input: 'H' is B natural, 'B' is B flat. "
-            "Default (without this flag) is standard input: 'B' is B natural, 'Bb' is B flat."
-        ),
-    )
-    cli_parser.add_argument(
-        "-out-ger",
-        "--out-ger",
-        dest="out_ger",
-        action="store_true",
-        help=(
-            "German notation on output: 'H' is B natural, 'B' is B flat. "
-            "Default (without this flag) is standard output: 'B' is B natural, 'Bb' is B flat."
-        ),
-    )
-    cli_parser.add_argument(
-        "--layout",
-        "-l",
-        type=str,
-        default="sidebar",
-        choices=["standard", "sidebar"],
-        help="Layout type: 'sidebar' (default) or 'standard'",
-    )
-    cli_parser.add_argument(
-        "--expand-chorus",
-        "-ex",
-        action="store_true",
-        help=(
-            "Expand section references: replace comments that match section labels "
-            "(chorus, pre-chorus, bridge) with the actual content."
-        ),
-    )
-    cli_parser.add_argument(
-        "-db",
-        "--from-db",
-        nargs="+",
-        metavar="SONG_NUM_OR_RANGE",
-        help=(
-            "Брать песни из БД по указанным номерам или диапазонам "
-            "(формат N или N-M) вместо чтения файлов из папки. "
-            "Примеры: -db 321 322 323  или  -db 300-350 400"
-        ),
-    )
-    cli_parser.add_argument(
-        "-small-ext",
-        "--small-extensions",
-        dest="small_extensions",
-        action="store_true",
-        help=(
-            "Включить режим уменьшенных дополнений аккордов "
-            "(dim7, maj7, sus4 и т.п.), кроме знаков диез/бемоль и минорного m "
-            "сразу после тоники."
-        ),
-    )
-    return cli_parser.parse_args()
+    try:
+        from .cli import parse_args as cli_parse_args
+    except ImportError:
+        from cli import parse_args as cli_parse_args
+    return cli_parse_args()
 
 
-@dataclass
-class RenderParams:
-    """
-    Параметры рендера для библиотечного вызова.
-    Значения по умолчанию повторяют поведение CLI.
-    """
-    transpose: int = 0
-    capo: int = None
-    in_ger: bool = False
-    out_ger: bool = False
-    layout: str = "sidebar"
-    expand_chorus: bool = False
-    small_extensions: bool = False
+try:
+    from .api import RenderParams
+except ImportError:
+    from api import RenderParams
 
 
 def _params_to_args(params: RenderParams):
-    """
-    Преобразует RenderParams в объект с CLI-совместимыми полями.
-    Это позволяет переиспользовать apply_transforms() без дублирования логики.
-    """
-    return argparse.Namespace(
-        transpose=params.transpose,
-        capo=params.capo,
-        in_ger=params.in_ger,
-        out_ger=params.out_ger,
-        layout=params.layout,
-        expand_chorus=params.expand_chorus,
-        small_extensions=params.small_extensions,
-        from_db=None,
-    )
+    try:
+        from .api import _params_to_args as api_params_to_args
+    except ImportError:
+        from api import _params_to_args as api_params_to_args
+    return api_params_to_args(params)
 
 
 def _resolve_local_dir(dir_path):
@@ -1260,28 +1171,13 @@ def render_chordpro_to_jpg(
     small_extensions=False,
     output_dir=OUTPUT_DIR,
 ):
-    """
-    Публичный библиотечный API:
-    рендерит один ChordPro-текст в JPG и возвращает путь к JPG.
-    """
-    if not chordpro_text or not str(chordpro_text).strip():
-        raise ValueError("chordpro_text пустой: рендер невозможен.")
-
-    if layout not in ("standard", "sidebar"):
-        raise ValueError("layout должен быть 'standard' или 'sidebar'.")
-
-    parser = ChordProParser()
-    template_dir = _resolve_local_dir(TEMPLATE_DIR)
-    output_dir_resolved = _resolve_local_dir(output_dir)
-    template = _load_template(template_dir)
-
     try:
-        song = parser.parse(chordpro_text)
-    except Exception as e:
-        LOGGER.error(f"Ошибка разбора ChordPro в библиотечном режиме: {e}")
-        raise
-
-    params = RenderParams(
+        from .api import render_chordpro_to_jpg as api_render_chordpro_to_jpg
+    except ImportError:
+        from api import render_chordpro_to_jpg as api_render_chordpro_to_jpg
+    return api_render_chordpro_to_jpg(
+        chordpro_text=chordpro_text,
+        filename_stem=filename_stem,
         transpose=transpose,
         capo=capo,
         in_ger=in_ger,
@@ -1289,186 +1185,32 @@ def render_chordpro_to_jpg(
         layout=layout,
         expand_chorus=expand_chorus,
         small_extensions=small_extensions,
+        output_dir=output_dir,
     )
-    args = _params_to_args(params)
-
-    try:
-        apply_transforms(song, args)
-    except Exception as e:
-        LOGGER.error(f"Ошибка применения трансформаций в библиотечном режиме: {e}")
-        raise
-
-    safe_stem = _sanitize_filename_stem(filename_stem)
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        try:
-            return render_song_to_files(
-                safe_stem,
-                song,
-                template,
-                browser,
-                layout,
-                input_ger=in_ger,
-                output_ger=out_ger,
-                index_chords=small_extensions,
-                output_dir=output_dir_resolved,
-            )
-        finally:
-            browser.close()
 
 
 def render_songs_from_folder(args):
-    """
-    Рендерит песни из файлов в папке INPUT_DIR (текущий стандартный режим).
-    """
-    input_dir = _resolve_local_dir(INPUT_DIR)
-    output_dir = _resolve_local_dir(OUTPUT_DIR)
-    template_dir = _resolve_local_dir(TEMPLATE_DIR)
-
-    # Создать выходную директорию при отсутствии
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Инициализация парсера и шаблона
-    parser = ChordProParser()
-    template = _load_template(template_dir)
-
-    # Поиск файлов
-    files = find_input_files(input_dir)
-
-    if not files:
-        LOGGER.warning(
-            f"Во входной директории '{input_dir}' не найдено файлов "
-            ".chordpro/.pro/.cho."
-        )
-        return
-
-    with sync_playwright() as p:
-        # Запуск браузера
-        browser = p.chromium.launch()
-        try:
-            for filename in files:
-                filepath = os.path.join(input_dir, filename)
-
-                # Чтение и разбор
-                try:
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        content = f.read()
-                except Exception as e:
-                    LOGGER.error(f"Ошибка чтения входного файла '{filepath}': {e}")
-                    continue
-
-                try:
-                    song = parser.parse(content)
-                except Exception as e:
-                    LOGGER.error(f"Ошибка разбора файла '{filename}': {e}")
-                    continue
-
-                try:
-                    apply_transforms(song, args)
-                except Exception as e:
-                    LOGGER.error(
-                        f"Ошибка применения преобразований для '{filename}': {e}"
-                    )
-                    continue
-
-                try:
-                    render_song_to_files(
-                        filename,
-                        song,
-                        template,
-                        browser,
-                        args.layout,
-                        input_ger=args.in_ger,
-                        output_ger=args.out_ger,
-                        index_chords=args.small_extensions,
-                        output_dir=output_dir,
-                    )
-                except Exception:
-                    continue
-        finally:
-            browser.close()
+    try:
+        from .cli import render_songs_from_folder as cli_render_songs_from_folder
+    except ImportError:
+        from cli import render_songs_from_folder as cli_render_songs_from_folder
+    return cli_render_songs_from_folder(args)
 
 
 def render_songs_from_db(args):
-    """
-    Рендерит песни, взятые из поля songs.chordpro по номерам/диапазонам,
-    указанным во флаге -db/--from-db.
-    """
-    raw_tokens = args.from_db or []
-    song_numbers = _parse_song_numbers(raw_tokens)
-    if not song_numbers:
-        LOGGER.error("Не удалось разобрать номера песен для режима --from-db.")
-        return
-
-    output_dir = _resolve_local_dir(OUTPUT_DIR)
-    template_dir = _resolve_local_dir(TEMPLATE_DIR)
-
-    db_manager = _get_db_manager()
-    if db_manager is None:
-        return
-
-    # Создать выходную директорию при отсутствии
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Инициализация парсера и шаблона
-    parser = ChordProParser()
-    template = _load_template(template_dir)
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        try:
-            for song_number in song_numbers:
-                chordpro_text, title = _fetch_song_chordpro_and_title(
-                    db_manager, song_number
-                )
-                if not chordpro_text:
-                    # Уже выведено предупреждение, просто пропускаем
-                    continue
-
-                filename = _make_filename_for_song(song_number, title)
-
-                try:
-                    song = parser.parse(chordpro_text)
-                except Exception as e:
-                    LOGGER.error(f"Ошибка разбора файла '{filename}': {e}")
-                    continue
-
-                try:
-                    apply_transforms(song, args)
-                except Exception as e:
-                    LOGGER.error(
-                        f"Ошибка применения преобразований для '{filename}': {e}"
-                    )
-                    continue
-
-                try:
-                    render_song_to_files(
-                        filename,
-                        song,
-                        template,
-                        browser,
-                        args.layout,
-                        input_ger=args.in_ger,
-                        output_ger=args.out_ger,
-                        index_chords=args.small_extensions,
-                        output_dir=output_dir,
-                    )
-                except Exception:
-                    continue
-        finally:
-            browser.close()
-            db_manager.close()
+    try:
+        from .cli import render_songs_from_db as cli_render_songs_from_db
+    except ImportError:
+        from cli import render_songs_from_db as cli_render_songs_from_db
+    return cli_render_songs_from_db(args)
 
 
 def main():
-    args = parse_args()
-
-    # Если указан режим работы с БД, берём песни по номерам из songs.chordpro
-    if getattr(args, "from_db", None):
-        render_songs_from_db(args)
-    else:
-        # Стандартный режим: брать .cho/.pro/.chordpro файлы из папки INPUT_DIR
-        render_songs_from_folder(args)
+    try:
+        from .cli import main as cli_main
+    except ImportError:
+        from cli import main as cli_main
+    return cli_main()
 
 
 if __name__ == "__main__":

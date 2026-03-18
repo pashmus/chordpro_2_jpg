@@ -35,6 +35,30 @@ playwright install
 
 ## 🛠 Использование
 
+### 0. Библиотечный вызов (через import)
+
+Теперь конвертер можно вызывать как библиотеку без CLI:
+
+```python
+from chordpro_2_jpg import render_chordpro_to_jpg
+
+jpg_path = render_chordpro_to_jpg(
+    chordpro_text=chordpro_text,
+    filename_stem="331_song",
+    transpose=0,
+    capo=None,
+    layout="sidebar",
+    in_ger=False,
+    out_ger=False,
+    expand_chorus=False,
+    small_extensions=False,  # эквивалент флага -small-ext
+)
+```
+
+- Публичный API находится в `chordpro_2_jpg/api.py`.
+- Пакетный импорт доступен через `chordpro_2_jpg/__init__.py`.
+- CLI остаётся полностью рабочим, как и раньше.
+
 ### 1. Режим из папки (как раньше)
 
 - Поместите ваши файлы `.chordpro`, `.pro` или `.cho` в папку `input_cho/` (см. константу `INPUT_DIR` в `chordpro_to_jpg.py`).
